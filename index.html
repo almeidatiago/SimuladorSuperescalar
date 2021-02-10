@@ -2,22 +2,16 @@
 <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <script type="module" type="text/javascript" src="./js/index.js"></script>
+        <script type="module" src="./js/index.js"></script>
     </head>
     <body>
         <textarea id="textarea" cols="80" rows="5">
-flw r2, 25(a0)
-fmul.s r3 r2 r4
-fadd.s r1 r5 r3
-lw x5, 40(x6)
-flw r2, -24(a0)
-li x5,100
-sw a1, -16(s0)
-add x1, x2, x3
-addi a0, a1, 3
-sub a2, a0, a1
-mul a2, a0, a1
-div a2, a0, a1
+flw f6, 32(a2)
+flw f2, 44(a3)
+fmul.s f0, f2, f4
+fsub.s f8, f2, f6
+fdiv.s f10, f0, f6
+fadd.s f6, f6, f2
         </textarea>
         <br />
         <button id="button">Processar</button>
