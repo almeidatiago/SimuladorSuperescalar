@@ -1,5 +1,5 @@
 import * as assembly from './assembly.js';
-import * as tomasulo from './tomasulo/state.js';
+import * as tomasulo from './tomasulo.js';
 
 document.getElementById('button').addEventListener('click', () => {
     const inst = assembly.parse(document.getElementById('textarea').value);

@@ -1,5 +1,5 @@
-import * as rand from '../rand.js';
-import { INSTRUCTION_TYPE } from '../assembly.js';
+import * as rand from './rand.js';
+import { INSTRUCTION_TYPE } from './assembly.js';
 
 /** Registrador virtual. */
 export class Register {
