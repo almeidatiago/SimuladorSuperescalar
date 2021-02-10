@@ -18,6 +18,28 @@ export class Register {
         this.value = value;
     }
 
+    /**
+     * Descreve o registrador.
+     */
+    inspect() {
+        if (this.qi !== null)
+            return `[${this.qi}]`;
+        if (this.value !== null)
+            return `${this.value}`;
+        return '-';
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {Register}
+     */
+    clone() {
+        let c = new Register();
+        c.qi = this.qi;
+        c.value = this.value;
+        return c;
+    }
+
 }
 
 /** Estação de reserva. */
@@ -43,6 +65,22 @@ export class ReservationStation {
      */
     inspect() {
         return `${this.busy ? 'Sim' : 'Não'}\t${this.op ? this.op : '-'}\t${this.vj ? this.vj : '-'}\t${this.vk ? this.vk : '-'}\t${this.qj ? this.qj : '-'}\t${this.qk ? this.qk : '-'}\t${this.a ? this.a : '-'}`;
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {ReservationStation}
+     */
+    clone() {
+        let c = new ReservationStation(this.operations);
+        c.op = this.op;
+        c.vj = this.vj;
+        c.vk = this.vk;
+        c.qj = this.qj;
+        c.qk = this.qk;
+        c.a = this.a;
+        c.busy = this.busy;
+        return c;
     }
 
 }
@@ -93,18 +131,35 @@ export class State {
             str += `    ${i}: ${this.instruction_queue[i].line}\n`;
 
         str += 'Registradores:\n';
-        for (let name of this.register_names) {
-            let value = this.registers[name].value;
-            if (value === null)
-                value = '-';
-            str += `    ${name} = ${value}\n`;
-        }
+        for (let name of this.register_names)
+            str += `    ${name} = ${this.registers[name].inspect()}\n`;
 
         str += 'Estações de reserva:\n         \tBusy \tOp. \tVj \tVk \tQj \tQk \tA\n';
         for (let name in this.reservation_stations)
             str += `    ${name}:\t${this.reservation_stations[name].inspect()}\n`;
 
         return str;
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {State}
+     */
+    clone() {
+        let p = this.instruction_queue.map(x => x.clone());
+
+        let r = {};
+        for (let name in this.registers)
+            r[name] = this.registers[name].clone();
+
+        let rs = {};
+        for (let name in this.reservation_stations)
+            rs[name] = this.reservation_stations[name].clone();
+
+        let c = new State(p, r);
+        c.reservation_stations = rs;
+
+        return c;
     }
 
 }

@@ -50,6 +50,14 @@ export class Instruction {
         }
     }
 
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {Instruction}
+     */
+    clone() {
+        return new Instruction(this.line, this.name, this.type);
+    }
+
 }
 
 /** Instruções de load a partir de endereço. */
@@ -78,6 +86,14 @@ export class LoadAddrInstruction extends Instruction {
         return `${super.inspect()} do endereço em ${this.src[0]}, com offset de ${this.src[1]}, para o registrador ${this.dest}.`;
     }
 
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {LoadAddrInstruction}
+     */
+    clone() {
+        return new LoadAddrInstruction(this.line, this.name, this.src[0], this.src[1], this.dest);
+    }
+
 }
 
 /** Instruções de load de valor imediato. */
@@ -102,6 +118,14 @@ export class LoadImmInstruction extends Instruction {
      */
     inspect() {
         return `${super.inspect()} o valor ${this.src} para o registrador ${this.dest}.`;
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {LoadImmInstruction}
+     */
+    clone() {
+        return new LoadImmInstruction(this.line, this.name, this.src, this.dest);
     }
 
 }
@@ -130,6 +154,14 @@ export class StoreInstruction extends Instruction {
      */
     inspect() {
         return `${super.inspect()} o valor em ${this.src} para o endereço em ${this.dest[0]}, com offset de ${this.dest[1]}.`;
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {StoreInstruction}
+     */
+    clone() {
+        return new StoreInstruction(this.line, this.name, this.src, this.dest[0], this.dest[1]);
     }
 
 }
@@ -163,6 +195,14 @@ export class ArithmeticInstruction extends Instruction {
         return `${super.inspect()} do valor em ${this.rhs} com o valor em ${this.lhs}, e armazena o resultado em ${this.dest}.`;
     }
 
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {ArithmeticInstruction}
+     */
+    clone() {
+        return new ArithmeticInstruction(this.line, this.name, this.type, this.rhs, this.lhs, this.dest);
+    }
+
 }
 
 /** Instruções aritméticas de valor imediato. */
@@ -191,6 +231,14 @@ export class ArithmeticImmInstruction extends Instruction {
      */
     inspect() {
         return `${super.inspect()} do valor em ${this.rhs} com o valor ${this.value}, e armazena o resultado em ${this.dest}.`;
+    }
+
+    /**
+     * Efetua uma cópia profunda deste objeto.
+     * @returns {ArithmeticImmInstruction}
+     */
+    clone() {
+        return new ArithmeticImmInstruction(this.line, this.name, this.type, this.rhs, this.value, this.dest);
     }
 
 }
