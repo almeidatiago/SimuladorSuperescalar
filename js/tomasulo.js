@@ -1,3 +1,4 @@
+// import * as assembly from '../assembly.js';
 import * as rand from './rand.js';
 import { INSTRUCTION_TYPE } from './assembly.js';
 
@@ -10,6 +11,14 @@ export class Register {
     }
 
     /**
+     * Verifica se este registrador está a espera do valor de uma estação de reserva.
+     * @returns {boolean}
+     */
+    busy() {
+        return this.qi !== null;
+    }
+
+    /**
      * Sobrescreve o valor deste registrador, resetando a flag Qi caso esteja ativada.
      * @param {number} value
      */
@@ -19,10 +28,18 @@ export class Register {
     }
 
     /**
+     * Define que o registrador receberá o valor a ser produzido por uma uma estação de reserva.
+     * @param {string} name 
+     */
+    wait_for_station(name) {
+        this.qi = name;
+    }
+
+    /**
      * Descreve o registrador.
      */
     inspect() {
-        if (this.qi !== null)
+        if (this.busy())
             return `[${this.qi}]`;
         if (this.value !== null)
             return `${this.value}`;
@@ -61,6 +78,32 @@ export class ReservationStation {
     }
 
     /**
+     * Decide o valor de Vj e Qj de acordo com o estado do registrador indicado. Utilizado durante a fase 'Issue'.
+     * @param {Register} register 
+     */
+    set_j_from_register(register) {
+        if (register.busy()) {
+            this.qj = register.qi;
+        } else {
+            this.vj = register.value;
+            this.qj = null;
+        }
+    }
+
+    /**
+     * Decide o valor de Vk e Qk de acordo com o estado do registrador indicado. Utilizado durante a fase 'Issue'.
+     * @param {Register} register 
+     */
+    set_k_from_register(register) {
+        if (register.busy()) {
+            this.qk = register.qi;
+        } else {
+            this.vk = register.value;
+            this.qk = null;
+        }
+    }
+
+    /**
      * Descreve a estação de reserva.
      */
     inspect() {
@@ -85,16 +128,22 @@ export class ReservationStation {
 
 }
 
-//** Estado de processamento */
+/** Estado de processamento */
 export class State {
 
     /**
-     * @param {assembly.Instruction[]} program Instruções de execução
+     * @param {Object.<number, assembly.Instruction[]>} program Programa a ser executado
      * @param {Object.<string, Register>} registers Registradores em seu estado inicial
      */
     constructor(program, registers) {
-        this.instruction_queue = program;
+        this.program = program;
         this.registers = registers;
+
+        // Ciclo de clock que este estado representa
+        this.cycle = 0;
+
+        // Posição da 'cabeça' da fila de execução, em relação ao programa
+        this.instruction_queue = 0;
 
         this.reservation_stations = {
             'Load1': new ReservationStation([INSTRUCTION_TYPE.LOAD, INSTRUCTION_TYPE.STORE]),
@@ -126,9 +175,9 @@ export class State {
      * Descreve o estado.
      */
     inspect() {
-        let str = 'Fila de instruções:\n';
-        for (let i = 0; i < this.instruction_queue.length; i++)
-            str += `    ${i}: ${this.instruction_queue[i].line}\n`;
+        let str = `Clock: ${this.cycle}\nFila de instruções:\n`;
+        for (let i = this.instruction_queue; i < Object.keys(this.program).length; i++)
+            str += `    ${i}: ${this.program[i].line}\n`;
 
         str += 'Registradores:\n';
         for (let name of this.register_names)
@@ -146,8 +195,6 @@ export class State {
      * @returns {State}
      */
     clone() {
-        let p = this.instruction_queue.map(x => x.clone());
-
         let r = {};
         for (let name in this.registers)
             r[name] = this.registers[name].clone();
@@ -156,18 +203,82 @@ export class State {
         for (let name in this.reservation_stations)
             rs[name] = this.reservation_stations[name].clone();
 
-        let c = new State(p, r);
+        let c = new State(this.program, r);
+        c.cycle = this.cycle;
+        c.instruction_queue = this.instruction_queue;
         c.reservation_stations = rs;
 
         return c;
     }
 
+    next_cycle() {
+        this.cycle++;
+
+        // 1 - Issue
+        const next_inst = this.program[this.instruction_queue];
+        const rs = this.is_station_free(next_inst);
+        if (rs !== null) {
+            // Estação de reserva livre, issue continua...
+            this.instruction_queue++;
+            const station = this.reservation_stations[rs];
+            station.op = next_inst.name;
+
+            // Arithmetic operation
+            if (next_inst.type >= INSTRUCTION_TYPE.ADD) {
+                station.busy = true;
+                station.set_j_from_register(this.registers[next_inst.lhs]);
+                station.set_k_from_register(this.registers[next_inst.rhs]);
+                this.registers[next_inst.dest].wait_for_station(rs);
+            }
+
+            // Load or store
+            if (next_inst.type === INSTRUCTION_TYPE.LOAD || next_inst.type === INSTRUCTION_TYPE.STORE) {
+                const addr_reg = next_inst.type === INSTRUCTION_TYPE.LOAD ? next_inst.src[0] : next_inst.dest[0];
+                const addr_off = next_inst.type === INSTRUCTION_TYPE.LOAD ? next_inst.src[1] : next_inst.dest[1];
+
+                station.busy = true;
+                station.set_j_from_register(this.registers[addr_reg]);                
+                station.a = addr_off;
+            }
+
+            // Load only
+            if (next_inst.type === INSTRUCTION_TYPE.LOAD)
+                this.registers[next_inst.dest].wait_for_station(rs);
+
+            // Store only
+            if (next_inst.type === INSTRUCTION_TYPE.STORE)
+                station.set_k_from_register(this.registers[next_inst.src]);
+        } else {
+            console.log('stall'); // TODO descrição dos passos individuais em cada estágio
+        }
+
+        // 2 - Execute
+    }
+
+    /**
+     * Verifica se há uma estação de reserva livre para receber esta instrução.
+     * @param {assembly.Instruction} instruction 
+     * @returns {null|string}
+     */
+    is_station_free(instruction) {
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+            if (!rs.busy && rs.operations.includes(instruction.type))
+                return name;
+        }
+        return null;
+    }
+
 }
 
-export function simulate(program) {
+/**
+ * 
+ * @param {assembly.Instruction[]} instructions 
+ */
+export function simulate(instructions) {
     // Coleta os nomes dos registradores utilizados no programa, e os inicializa quando necessário
     let registers = {};
-    for (let instruction of program) {
+    for (let instruction of instructions) {
         // Para os registradores que serão lidos, são gerados valores de exemplo para a simulação
         for (let name of instruction.src_registers) {
             if (name in registers)
@@ -186,7 +297,18 @@ export function simulate(program) {
             registers[name] = new Register();
     }
 
+    // Constrói objeto de programa, com instruções em sua ordem de execução
+    let program = {};
+    for (let i = 0; i < instructions.length; i++)
+        program[i] = instructions[i];
+
     // Cria o estado inicial do processamento.
-    let state = new State(program, registers);
-    console.log(state.inspect());
+    let states = [new State(program, registers)];
+    for (let i = 0; i < 2; i++) {
+        let next = states[i].clone();
+        next.next_cycle();
+        states.push(next);
+    }
+    
+    return states.map(s => s.inspect()).join('⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻\n');
 }

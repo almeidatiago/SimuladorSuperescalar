@@ -112,7 +112,7 @@ export class StoreInstruction extends Instruction {
         this.dest = [dest_addr, dest_offset];
 
         this.src_registers.add(src);
-        this.dest_registers.add(dest_addr);
+        this.src_registers.add(dest_addr);
     }
 
     /**
