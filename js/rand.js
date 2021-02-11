@@ -1,3 +1,5 @@
+import { INSTRUCTION_TYPE } from './assembly.js';
+
 /**
  * Gera um número a partir de uma string, de forma determinística
  * @param {string} str
@@ -35,4 +37,22 @@ export function float(seed) {
     n1 = Math.max(n1, 1) % 99;
     n2 = Math.max(n2, 1) % 9;
     return parseFloat(`${n1}.${n2}`);
+}
+
+/**
+ * Gera um valor pseudo-aleatório, de tamanho pequeno, para preencher o registrador/instrução indicado.
+ * @param {string} register_name 
+ * @param {string} instruction_name 
+ * @param {INSTRUCTION_TYPE} instruction_type 
+ */
+export function instructionValue(register_name, instruction_name, instruction_type) {
+    if (
+        instruction_name[0] === 'f' && (
+            (instruction_type != INSTRUCTION_TYPE.LOAD && instruction_type != INSTRUCTION_TYPE.STORE) ||
+            register_name[0] === 'f'
+        )
+    )
+        return float(register_name);
+    else
+        return int(register_name);
 }
