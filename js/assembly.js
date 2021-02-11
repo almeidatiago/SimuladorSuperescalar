@@ -60,8 +60,8 @@ export class Instruction {
 
 }
 
-/** Instruções de load a partir de endereço. */
-export class LoadAddrInstruction extends Instruction {
+/** Instruções de load. */
+export class LoadInstruction extends Instruction {
 
     /**
      * @param {string} line Instrução original.
@@ -88,44 +88,10 @@ export class LoadAddrInstruction extends Instruction {
 
     /**
      * Efetua uma cópia profunda deste objeto.
-     * @returns {LoadAddrInstruction}
+     * @returns {LoadInstruction}
      */
     clone() {
-        return new LoadAddrInstruction(this.line, this.name, this.src[0], this.src[1], this.dest);
-    }
-
-}
-
-/** Instruções de load de valor imediato. */
-export class LoadImmInstruction extends Instruction {
-
-    /**
-     * @param {string} line Instrução original.
-     * @param {string} name Comando específico.
-     * @param {string} src_value Valor de load.
-     * @param {string} dest Registrador de destino.
-     */
-    constructor(line, name, src_value, dest) {
-        super(line, name, INSTRUCTION_TYPE.LOAD);
-        this.src = src_value;
-        this.dest = dest;
-
-        this.dest_registers.add(dest);
-    }
-
-    /**
-     * Descreve a instrução.
-     */
-    inspect() {
-        return `${super.inspect()} o valor ${this.src} para o registrador ${this.dest}.`;
-    }
-
-    /**
-     * Efetua uma cópia profunda deste objeto.
-     * @returns {LoadImmInstruction}
-     */
-    clone() {
-        return new LoadImmInstruction(this.line, this.name, this.src, this.dest);
+        return new LoadInstruction(this.line, this.name, this.src[0], this.src[1], this.dest);
     }
 
 }
@@ -173,14 +139,14 @@ export class ArithmeticInstruction extends Instruction {
      * @param {string} line Instrução original.
      * @param {string} name Comando específico.
      * @param {INSTRUCTION_TYPE} type Tipo da operação.
-     * @param {string} rhs Operando direito.
      * @param {string} lhs Operando esquerdo.
+     * @param {string} rhs Operando direito.
      * @param {string} dest Registrador de destino.
      */
-    constructor(line, name, type, rhs, lhs, dest) {
+    constructor(line, name, type, lhs, rhs, dest) {
         super(line, name, type);
-        this.rhs = rhs;
         this.lhs = lhs;
+        this.rhs = rhs;
         this.dest = dest;
 
         this.src_registers.add(rhs);
@@ -192,7 +158,7 @@ export class ArithmeticInstruction extends Instruction {
      * Descreve a instrução.
      */
     inspect() {
-        return `${super.inspect()} do valor em ${this.rhs} com o valor em ${this.lhs}, e armazena o resultado em ${this.dest}.`;
+        return `${super.inspect()} do valor em ${this.lhs} com o valor em ${this.rhs}, e armazena o resultado em ${this.dest}.`;
     }
 
     /**
@@ -200,45 +166,7 @@ export class ArithmeticInstruction extends Instruction {
      * @returns {ArithmeticInstruction}
      */
     clone() {
-        return new ArithmeticInstruction(this.line, this.name, this.type, this.rhs, this.lhs, this.dest);
-    }
-
-}
-
-/** Instruções aritméticas de valor imediato. */
-export class ArithmeticImmInstruction extends Instruction {
-
-    /**
-     * @param {string} line Instrução original.
-     * @param {string} name Comando específico.
-     * @param {INSTRUCTION_TYPE} type Tipo da operação.
-     * @param {string} rhs Operando direito.
-     * @param {string} value Valor esquerdo.
-     * @param {string} dest Registrador de destino.
-     */
-    constructor(line, name, type, rhs, value, dest) {
-        super(line, name, type);
-        this.rhs = rhs;
-        this.value = value;
-        this.dest = dest;
-
-        this.src_registers.add(rhs);
-        this.dest_registers.add(dest);
-    }
-
-    /**
-     * Descreve a instrução.
-     */
-    inspect() {
-        return `${super.inspect()} do valor em ${this.rhs} com o valor ${this.value}, e armazena o resultado em ${this.dest}.`;
-    }
-
-    /**
-     * Efetua uma cópia profunda deste objeto.
-     * @returns {ArithmeticImmInstruction}
-     */
-    clone() {
-        return new ArithmeticImmInstruction(this.line, this.name, this.type, this.rhs, this.value, this.dest);
+        return new ArithmeticInstruction(this.line, this.name, this.type, this.lhs, this.rhs, this.dest);
     }
 
 }
@@ -254,15 +182,11 @@ function parseInstruction(line) {
 
     // Instruções de load a partir de endereço, ex.: lw x5, 40(x6)
     if ((match = /(l[bhwdq]u?|fl[wdq])\s+(\w+),?\s*(-?\d+)\((\w+)\)/.exec(line)) !== null)
-        return new LoadAddrInstruction(match[0], match[1], match[4], match[3], match[2]);
+        return new LoadInstruction(match[0], match[1], match[4], match[3], match[2]);
 
     // Instruções de load a partir de endereço, ex.: lw x5, x6, 40
     if ((match = /(l[bhwdq]u?|fl[wdq])\s+(\w+),?\s*(\w+),?\s*(-?\d+)/.exec(line)) !== null)
-        return new LoadAddrInstruction(match[0], match[1], match[3], match[4], match[2]);
-
-    // Instruções de load de valor imediato, ex.: li x5, 100
-    if ((match = /li\s+(\w+),?\s*(\w+)/.exec(line)) !== null)
-        return new LoadImmInstruction(match[0], 'li', match[2], match[1]);
+        return new LoadInstruction(match[0], match[1], match[3], match[4], match[2]);
 
     // Instruções de store, ex.: sw a1, -16(s0)
     if ((match = /(s[bhwdq]|fs[wdq])\s+(\w+),?\s*(-?\d+)\((\w+)\)/.exec(line)) !== null)
@@ -275,10 +199,6 @@ function parseInstruction(line) {
     // Instruções de adição, ex.: add x1, x2, x3
     if ((match = /(add[wd]?|fadd\.[sdq])\s+(\w+),?\s*(\w+),?\s*(\w+)/.exec(line)) !== null)
         return new ArithmeticInstruction(match[0], match[1], INSTRUCTION_TYPE.ADD, match[3], match[4], match[2]);
-
-    // Instruções de adição de valor imediato, ex.: addi a0, a1, 3
-    if ((match = /(addi[wd]?)\s+(\w+),?\s*(\w+),?\s*(\w+)/.exec(line)) !== null)
-        return new ArithmeticImmInstruction(match[0], match[1], INSTRUCTION_TYPE.ADD, match[3], match[4], match[2]);
 
     // Instruções de subtração, ex.: sub a2, a0, a1
     if ((match = /(sub[wd]?|fsub\.[sdq])\s+(\w+),?\s*(\w+),?\s*(\w+)/.exec(line)) !== null)
