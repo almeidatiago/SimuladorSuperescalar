@@ -182,19 +182,19 @@ function parseInstruction(line) {
 
     // Instruções de load a partir de endereço, ex.: lw x5, 40(x6)
     if ((match = /(l[bhwdq]u?|fl[wdq])\s+(\w+),?\s*(-?\d+)\((\w+)\)/.exec(line)) !== null)
-        return new LoadInstruction(match[0], match[1], match[4], match[3], match[2]);
+        return new LoadInstruction(match[0], match[1], match[4], parseInt(match[3]), match[2]);
 
     // Instruções de load a partir de endereço, ex.: lw x5, x6, 40
     if ((match = /(l[bhwdq]u?|fl[wdq])\s+(\w+),?\s*(\w+),?\s*(-?\d+)/.exec(line)) !== null)
-        return new LoadInstruction(match[0], match[1], match[3], match[4], match[2]);
+        return new LoadInstruction(match[0], match[1], match[3], parseInt(match[4]), match[2]);
 
     // Instruções de store, ex.: sw a1, -16(s0)
     if ((match = /(s[bhwdq]|fs[wdq])\s+(\w+),?\s*(-?\d+)\((\w+)\)/.exec(line)) !== null)
-        return new StoreInstruction(match[0], match[1], match[2], match[4], match[3]);
+        return new StoreInstruction(match[0], match[1], match[2], match[4], parseInt(match[3]));
 
     // Instruções de store, ex.: sw a1, s0, -16
     if ((match = /(s[bhwdq]|fs[wdq])\s+(\w+),?\s*(\w+),?\s*(-?\d+)/.exec(line)) !== null)
-        return new StoreInstruction(match[0], match[1], match[2], match[3], match[4]);
+        return new StoreInstruction(match[0], match[1], match[2], match[3], parseInt(match[4]));
 
     // Instruções de adição, ex.: add x1, x2, x3
     if ((match = /(add[wd]?|fadd\.[sdq])\s+(\w+),?\s*(\w+),?\s*(\w+)/.exec(line)) !== null)

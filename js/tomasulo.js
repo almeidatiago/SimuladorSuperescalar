@@ -68,9 +68,17 @@ export class ReservationStation {
      */
     constructor(operations, functional_wait) {
         this.operations = operations;
-        this.program_order = null;
         this.functional_wait = functional_wait;
+        this.reset();
+    }
+
+    /**
+     * Retorna as propriedades desta estação para seus valores iniciais.
+     */
+    reset() {
+        this.program_order = null;
         this.functional_unit_step = 0;
+        this.result = null;
 
         this.op = null; // Operação a ser executada nos operandos
         this.vj = null; // Valor do primeiro operando
@@ -95,6 +103,24 @@ export class ReservationStation {
      */
     is_k_ready() {
         return this.qk === null && this.vk !== null;
+    }
+
+    /**
+     * Sobrescreve o valor de Vj e Qj.
+     * @param {number} value 
+     */
+    set_j_value(value) {
+        this.vj = value;
+        this.qj = null;
+    }
+
+    /**
+     * Sobrescreve o valor de Vk e Qk.
+     * @param {number} value 
+     */
+    set_k_value(value) {
+        this.vk = value;
+        this.qk = null;
     }
 
     /**
@@ -127,7 +153,10 @@ export class ReservationStation {
      * Descreve a estação de reserva.
      */
     inspect() {
-        return `${this.busy ? 'Sim' : 'Não'}\t${this.op ? this.op : '-'}\t${this.vj ? this.vj : '-'}\t${this.vk ? this.vk : '-'}\t${this.qj ? this.qj : '-'}\t${this.qk ? this.qk : '-'}\t${this.a ? this.a : '-'}`;
+        let a = '-';
+        if (this.a)
+            a = this.a.length > 1 ? `${this.a[0]} (${this.a[2]}+${this.a[1]})` : this.a[0];
+        return `${this.busy ? 'Sim' : 'Não'}\t${this.op ? this.op : '-'}\t${this.vj ? this.vj : '-'}\t${this.vk ? this.vk : '-'}\t${this.qj ? this.qj : '-'}\t${this.qk ? this.qk : '-'}\t${a}`;
     }
 
     /**
@@ -138,6 +167,7 @@ export class ReservationStation {
         let c = new ReservationStation(this.operations, this.functional_wait);
         c.program_order = this.program_order;
         c.functional_unit_step = this.functional_unit_step;
+        c.result = this.result;
         c.op = this.op;
         c.vj = this.vj;
         c.vk = this.vk;
@@ -156,10 +186,12 @@ export class State {
     /**
      * @param {Object.<number, assembly.Instruction[]>} program Programa a ser executado
      * @param {Object.<string, Register>} registers Registradores em seu estado inicial
+     * @param {Object.<string, number>} memory Memória em seu estado inicial
      */
-    constructor(program, registers) {
+    constructor(program, registers, memory) {
         this.program = program;
         this.registers = registers;
+        this.memory = memory;
 
         // Ciclo de clock que este estado representa
         this.cycle = 0;
@@ -213,6 +245,13 @@ export class State {
         for (let name in this.reservation_stations)
             str += `    ${name}:\t${this.reservation_stations[name].inspect()}\n`;
 
+        str += 'Memória:\n';
+        if (Object.keys(this.memory).length > 0) {
+            for (let addr in this.memory)
+                str += `    ${addr} = ${this.memory[addr]}\n`;
+        }
+
+        str += '\n';
         return str;
     }
 
@@ -229,7 +268,11 @@ export class State {
         for (let name in this.reservation_stations)
             rs[name] = this.reservation_stations[name].clone();
 
-        let c = new State(this.program, r);
+        let m = {};
+        for (let addr in this.memory)
+            m[addr] = this.memory[addr];
+
+        let c = new State(this.program, r, m);
         c.cycle = this.cycle;
         c.instruction_queue = this.instruction_queue;
         c.reservation_stations = rs;
@@ -240,18 +283,26 @@ export class State {
     next_cycle() {
         this.cycle++;
 
+        // Calcula as estações de reserva que serão utilizadas antes de efetuar os passos de processamento:
+        // Fase 1
+        const s1_inst = this.program[this.instruction_queue];
+        const s1_rs = this.station_for_stage_one(s1_inst);
         // Fase 2
-        const ls_step_one = this.next_load_store_step_one();
-        const ls_step_two = this.next_load_store_step_two();
-        const op_exec = this.next_operation_exec();
+        const s2op_rs = this.stations_for_stage_two_operations();
+        const s2s1_rs = this.station_for_stage_two_step_one();
+        const s2s2_rs = this.stations_for_stage_two_step_two();
+        // Fase 3
+        const s3_rs = this.station_for_stage_three();
+        const s3store_rs = this.stations_for_stage_three_store();
+
+        if (s1_rs === null && s2op_rs.length == 0 && s2s1_rs === null && s2s2_rs.length === 0 && s3_rs === null && s3store_rs.length === 0)
+            return false;
 
         // 1 - Issue
-        const next_inst = this.program[this.instruction_queue];
-        const rs = this.is_station_free(next_inst);
-        if (rs !== null) {
+        if (s1_rs !== null) {
             // Estação de reserva livre, issue continua...
-            const station = this.reservation_stations[rs];
-            station.op = next_inst.name;
+            const station = this.reservation_stations[s1_rs];
+            station.op = s1_inst.name;
             station.program_order = this.instruction_queue;
             station.functional_unit_step = station.functional_wait;
 
@@ -259,69 +310,143 @@ export class State {
             this.instruction_queue++;
 
             // Arithmetic operation
-            if (next_inst.type >= INSTRUCTION_TYPE.ADD) {
+            if (s1_inst.type >= INSTRUCTION_TYPE.ADD) {
                 station.busy = true;
-                station.set_j_from_register(this.registers[next_inst.lhs]);
-                station.set_k_from_register(this.registers[next_inst.rhs]);
-                this.registers[next_inst.dest].wait_for_station(rs);
+                station.set_j_from_register(this.registers[s1_inst.lhs]);
+                station.set_k_from_register(this.registers[s1_inst.rhs]);
+                this.registers[s1_inst.dest].wait_for_station(s1_rs);
             }
 
             // Load or store
-            if (next_inst.type === INSTRUCTION_TYPE.LOAD || next_inst.type === INSTRUCTION_TYPE.STORE) {
-                const addr_reg = next_inst.type === INSTRUCTION_TYPE.LOAD ? next_inst.src[0] : next_inst.dest[0];
-                const addr_off = next_inst.type === INSTRUCTION_TYPE.LOAD ? next_inst.src[1] : next_inst.dest[1];
+            if (s1_inst.type === INSTRUCTION_TYPE.LOAD || s1_inst.type === INSTRUCTION_TYPE.STORE) {
+                const addr_reg = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[0] : s1_inst.dest[0];
+                const addr_off = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[1] : s1_inst.dest[1];
 
                 station.busy = true;
                 station.set_j_from_register(this.registers[addr_reg]);
-                station.a = parseInt(addr_off);
+                station.a = [addr_off];
             }
 
             // Load only
-            if (next_inst.type === INSTRUCTION_TYPE.LOAD)
-                this.registers[next_inst.dest].wait_for_station(rs);
+            if (s1_inst.type === INSTRUCTION_TYPE.LOAD)
+                this.registers[s1_inst.dest].wait_for_station(s1_rs);
 
             // Store only
-            if (next_inst.type === INSTRUCTION_TYPE.STORE)
-                station.set_k_from_register(this.registers[next_inst.src]);
-        } else {
+            if (s1_inst.type === INSTRUCTION_TYPE.STORE)
+                station.set_k_from_register(this.registers[s1_inst.src]);
+        } else if (s1_inst !== null && s1_inst !== undefined) {
             console.log('stall'); // TODO descrição dos passos individuais em cada estágio
         }
 
         // 2 - Execute
-        
+
         // Arithmetic operation
-        for (let name of op_exec) {
+        for (let name of s2op_rs) {
             const station = this.reservation_stations[name];
-            // console.log(`${this.cycle} ${name}`); TODO execute
+            station.functional_unit_step--;
+
+            this.program_actions[station.program_order] = 'Exec';
+            if (station.functional_unit_step == 0) {
+                switch (this.program[station.program_order].type) {
+                    case INSTRUCTION_TYPE.ADD:
+                        station.result = station.vj + station.vk;
+                        break;
+                    case INSTRUCTION_TYPE.SUBTRACT:
+                        station.result = station.vj - station.vk;
+                        break;
+                    case INSTRUCTION_TYPE.MULTIPLY:
+                        station.result = station.vj * station.vk;
+                        break;
+                    case INSTRUCTION_TYPE.DIVIDE:
+                        station.result = station.vj / station.vk;
+                        break;
+                }
+            }
         }
 
         // Load/store step 1
-        if (ls_step_one !== null) {
-            const station = this.reservation_stations[ls_step_one];
-            station.a = `${station.a} + ${station.vj}`;
+        if (s2s1_rs !== null) {
+            const station = this.reservation_stations[s2s1_rs];
+            // if (this.program[station.program_order].type === INSTRUCTION_TYPE.STORE)
+            //     station.result = station.a + station.vj;
+            // station.a = `${station.result} (${station.a} + ${station.vj})`;
+            station.a = [station.a[0] + station.vj, station.a[0], station.vj];
             station.functional_unit_step--;
 
             this.program_actions[station.program_order] = 'Exec';
         }
 
-        // Load/store step 2
-        for (let name of ls_step_two) {
+        // Load step 2
+        for (let name of s2s2_rs) {
             const station = this.reservation_stations[name];
-            // console.log(`${this.cycle} ${name}`); TODO write
             station.functional_unit_step--;
 
             this.program_actions[station.program_order] = 'Exec';
+            if (station.functional_unit_step == 0) {
+                // const i = this.program[station.program_order];
+                // station.result = this.memory[station.vj + i.src[1]];
+                station.result = this.memory[station.a[0]];
+            }
         }
 
         // 3 - Write
+
+        // Arithmetic operation or load
+        if (s3_rs !== null) {
+            const station = this.reservation_stations[s3_rs];
+            for (let name in this.registers) {
+                if (this.registers[name].qi === s3_rs)
+                    this.registers[name].write_value(station.result);
+            }
+            for (let name in this.reservation_stations) {
+                if (this.reservation_stations[name].qj === s3_rs)
+                    this.reservation_stations[name].set_j_value(station.result);
+                if (this.reservation_stations[name].qk === s3_rs)
+                    this.reservation_stations[name].set_k_value(station.result);
+            }
+            this.program_actions[station.program_order] = 'Write';
+            station.reset();
+        }
+
+        // Store
+        for (let name of s3store_rs) {
+            const station = this.reservation_stations[name];
+            station.functional_unit_step--;
+
+            this.program_actions[station.program_order] = 'Write';
+            if (station.functional_unit_step == 0) {
+                // this.memory[station.result] = station.vk;
+                this.memory[station.a[0]] = station.vk;
+                station.reset();
+            }
+        }
+
+        return true;
     }
 
     /**
-     * Verifica se há uma estação de reserva livre para receber esta instrução.
-     * @param {assembly.Instruction} instruction 
+     * Retorna as estações de reserva do tipo indicado que estão marcadas como 'busy'.
+     * @param {string[]} type 
+     */
+    pending_stations(type) {
+        let pending = [];
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+            if (rs.busy && this.program[rs.program_order].type === type)
+                pending.push(rs.program_order);
+        }
+        return pending;
+    }
+
+    /**
+     * Retorna a estação de reserva, caso exista, que esteja disponível para receber a instrução indicada para a fase
+     * de 'Issue'.
+     * @param {Instruction} instruction
      * @returns {null|string}
      */
-    is_station_free(instruction) {
+    station_for_stage_one(instruction) {
+        if (instruction === null || instruction === undefined)
+            return null;
         for (let name in this.reservation_stations) {
             const rs = this.reservation_stations[name];
             if (!rs.busy && rs.operations.includes(instruction.type))
@@ -331,57 +456,11 @@ export class State {
     }
 
     /**
-     * A fase 'Execute' é feita de maneira diferente para as operações de LOAD e STORE, para manter a ordem de programa
-     * durante a escrita na memória. Este método retorna o id da estação de reserva, caso exista, da próxima unidade de
-     * load/store a ter o passo 1 executado.
-     * @returns {null|string}
-     */
-    next_load_store_step_one() {
-        let cur_name = null;
-        let cur_program_order = Infinity;
-        for (let name in this.reservation_stations) {
-            const rs = this.reservation_stations[name];
-            if (
-                rs.busy &&
-                (rs.operations.includes(INSTRUCTION_TYPE.LOAD) || rs.operations.includes(INSTRUCTION_TYPE.STORE)) &&
-                rs.functional_unit_step === rs.functional_wait &&
-                rs.is_j_ready() &&
-                rs.program_order < cur_program_order
-            ) {
-                cur_name = name;
-                cur_program_order = rs.program_order;
-            }
-        }
-        return cur_name;
-    }
-
-    /**
-     * As demais operações de LOAD e STORE, durante a fase 'Execute', podem continuar a sua execução durante o passo 2.
+     * Retorna as estações de reserva, caso existam, que estejam disponíveis para a fase de 'Execute' para as
+     * operações aritméticas.
      * @returns {string[]}
      */
-    next_load_store_step_two() {
-        let stations = [];
-        for (let name in this.reservation_stations) {
-            const rs = this.reservation_stations[name];
-            if (
-                rs.busy &&
-                (rs.operations.includes(INSTRUCTION_TYPE.LOAD) || rs.operations.includes(INSTRUCTION_TYPE.STORE)) &&
-                rs.functional_unit_step < rs.functional_wait &&
-                rs.functional_unit_step > 0
-            ) {
-                stations.push(name);
-            }
-        }
-        return stations;
-    }
-
-
-    /**
-     * Encontra as estações de reservas de operações aritméticas que estão prontas para começar/prosseguir a fase de
-     * 'Execute'.
-     * @returns {string[]}
-     */
-    next_operation_exec() {
+    stations_for_stage_two_operations() {
         let stations = [];
         for (let name in this.reservation_stations) {
             const rs = this.reservation_stations[name];
@@ -402,6 +481,123 @@ export class State {
         return stations;
     }
 
+    /**
+     * Retorna a estação de reserva, caso exista, que esteja disponível para o passo 1 da fase de 'Execute' para as
+     * operações de load/store. Estas operações são executadas desta maneira para impedir os hazards de leitura/escrita
+     * em memória das operações que apontam para o mesmo endereço.
+     * @returns {null|string}
+     */
+    station_for_stage_two_step_one() {
+        let cur_name = null;
+        let cur_program_order = Infinity;
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+            if (
+                rs.busy &&
+                (rs.operations.includes(INSTRUCTION_TYPE.LOAD) || rs.operations.includes(INSTRUCTION_TYPE.STORE)) &&
+                rs.functional_unit_step === rs.functional_wait &&
+                rs.is_j_ready() &&
+                rs.program_order < cur_program_order
+            ) {
+                cur_name = name;
+                cur_program_order = rs.program_order;
+            }
+        }
+        return cur_name;
+    }
+
+    /**
+     * Retorna as estações de reserva, caso existam, que estejam disponíveis para o passo 2 da fase de 'Execute' para as
+     * operações de load. Estas operações são executadas desta maneira para impedir os hazards de leitura/escrita em
+     * memória das operações que apontam para o mesmo endereço.
+     * @returns {string[]}
+     */
+    stations_for_stage_two_step_two() {
+        let pending_stores = this.pending_stations(INSTRUCTION_TYPE.STORE);
+
+        let stations = [];
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+
+            if (
+                rs.busy &&
+                this.program[rs.program_order].type === INSTRUCTION_TYPE.LOAD &&
+                rs.functional_unit_step < rs.functional_wait &&
+                rs.functional_unit_step > 0
+            ) {
+                const load_addr = this.program[rs.program_order].src;
+
+                let has_dependency = false;
+                for (let i of pending_stores) {
+                    const store_addr = this.program[i].dest;
+                    if (i < rs.program_order && load_addr[0] === store_addr[0] && load_addr[1] === store_addr[1])
+                        has_dependency = true;
+                }
+
+                if (!has_dependency)
+                    stations.push(name);
+            }
+        }
+        return stations;
+    }
+
+    /**
+     * Retorna as estações de reserva, caso existam, que estejam disponíveis para a fase de 'Write' para as operações
+     * de store. Estas operações são executadas desta maneira para impedir os hazards de leitura/escrita em
+     * memória das operações que apontam para o mesmo endereço.
+     * @returns {string[]}
+     */
+    stations_for_stage_three_store() {
+        let pending_loads = this.pending_stations(INSTRUCTION_TYPE.LOAD);
+        let pending_stores = this.pending_stations(INSTRUCTION_TYPE.STORE);
+
+        let stations = [];
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+            if (
+                rs.busy &&
+                this.program[rs.program_order].type === INSTRUCTION_TYPE.STORE &&
+                rs.functional_unit_step < rs.functional_wait &&
+                rs.is_k_ready()
+            ) {
+                const store_addr = this.program[rs.program_order].src;
+
+                let has_dependency = false;
+                for (let i of pending_loads) {
+                    const addr = this.program[i].src;
+                    if (i < rs.program_order && store_addr[0] === addr[0] && store_addr[1] === addr[1])
+                        has_dependency = true;
+                }
+                for (let i of pending_stores) {
+                    const addr = this.program[i].dest;
+                    if (i < rs.program_order && store_addr[0] === addr[0] && store_addr[1] === addr[1])
+                        has_dependency = true;
+                }
+
+                if (!has_dependency)
+                    stations.push(name);
+            }
+        }
+        return stations;
+    }
+
+    /**
+     * Retorna a estação de reserva, caso exista, que esteja disponível para a fase de 'Execute'.
+     * @returns {null|string}
+     */
+    station_for_stage_three() {
+        for (let name in this.reservation_stations) {
+            const rs = this.reservation_stations[name];
+            if (
+                rs.busy &&
+                this.program[rs.program_order].type !== INSTRUCTION_TYPE.STORE &&
+                rs.functional_unit_step <= 0
+            )
+                return name;
+        }
+        return null;
+    }
+
 }
 
 /**
@@ -409,8 +605,9 @@ export class State {
  * @param {assembly.Instruction[]} instructions 
  */
 export function simulate(instructions) {
-    // Coleta os nomes dos registradores utilizados no programa, e os inicializa quando necessário
+    // Os valores dos registradores e das posições de memória que serão lidos são inicializados automaticamente
     let registers = {};
+    let memory = {};
     for (let instruction of instructions) {
         // Para os registradores que serão lidos, são gerados valores de exemplo para a simulação
         for (let name of instruction.src_registers) {
@@ -420,6 +617,11 @@ export function simulate(instructions) {
             let register = new Register();
             register.write_value(rand.instructionValue(name, instruction.name, instruction.type));
             registers[name] = register;
+
+            if (instruction.type === INSTRUCTION_TYPE.LOAD) {
+                const addr = registers[instruction.src[0]].value + instruction.src[1];
+                memory[addr] = rand.instructionValue(instruction.dest, instruction.name, instruction.type);
+            }
         }
 
         // Os demais registradores são inicializados vazios
@@ -433,11 +635,13 @@ export function simulate(instructions) {
         program[i] = instructions[i];
 
     // Cria o estado inicial do processamento.
-    let states = [new State(program, registers)];
-    for (let i = 0; i < 5; i++) {
+    let states = [new State(program, registers, memory)];
+    for (let i = 0; i < 100; i++) {
         let next = states[i].clone();
-        next.next_cycle();
+        let changes = next.next_cycle();
         states.push(next);
+        if (!changes)
+            break;
     }
 
     let wsl = 0;
@@ -469,7 +673,4 @@ export function simulate(instructions) {
         str += '⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻\n';
     }
     return str;
-
-    // return states.map(s => s.inspect()).join('⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻\n');
-    // return states.map(s => s.inspect()).join(' —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  —  — \n');
 }
