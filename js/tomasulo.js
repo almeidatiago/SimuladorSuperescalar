@@ -626,7 +626,8 @@ export function simulate(instructions) {
 
         // Os demais registradores são inicializados vazios
         for (let name of instruction.dest_registers)
-            registers[name] = new Register();
+            if (!(name in registers))
+                registers[name] = new Register();
     }
 
     // Constrói objeto de programa, com instruções em sua ordem de execução
