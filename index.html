@@ -2,21 +2,55 @@
 <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <script type="module" src="./js/index.js"></script>
+        <link rel="stylesheet" type="text/css" href="./css/index.css" />
+        <script type="text/javascript" src="./js/fabric.min.js"></script>
     </head>
     <body>
-        <textarea id="textarea" cols="80" rows="5">
-flw f6, 32(a2)
-flw f2, 44(a3)
-fmul.s f0, f2, f4
-fsub.s f8, f2, f6
-fdiv.s f10, f0, f6
-fadd.s f6, f6, f2
-        </textarea>
-        <br />
-        <button id="button">Processar</button>
-        <br />
-        <!-- <table id="txt"></table> -->
-        <pre id="txt"></pre>
+        <div id="workspace" class="screen">
+            <div id="header">
+                <img class="logo" src="./svg/cpu.svg" alt="Chip" />
+                <div class="title">Simulador<br />Superescalar</div>
+                <div id="open-novo" class="button"><img src="./svg/new.svg" alt="Nova" />Nova Simulação</div>
+            </div>
+            <div id="tab-names"><div id="tab-filler">&nbsp;</div></div>
+            <div id="tab-visual">
+                <div id="control">
+                    <div id="control-skip-back" class="control-button active"><img src="./svg/skipBack.svg" alt="Volta ciclo" /></div>
+                    <div id="control-counter"></div>
+                    <div id="control-skip-fwd" class="control-button active"><img src="./svg/skipFwd.svg" alt="Avança ciclo" /></div>
+                </div>
+                <canvas id="canvas" width="0" height="0"></canvas>
+            </div>
+            <div id="tab-timeline">
+                <table id="timeline"></table>
+            </div>
+        </div>
+        <div id="md-novo" class="modal screen">
+            <div class="dialog">
+                <img id="close-novo" class="close button" src="./svg/close.svg" alt="Close" />
+                <h1>Nova Simulação</h1>
+                <table class="form">
+                    <tr>
+                        <td>Exemplo:</td>
+                        <td>
+                            <select id="novo-template">
+                                <option value="" selected>&nbsp;</option>
+                                <option value="raw">Dependência RAW (Read after Write)</option>
+                                <option value="war">Dependência WAR (Write after Read)</option>
+                                <option value="waw">Dependência WAW (Write after Write)</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Código:</td>
+                        <td>
+                            <textarea id="novo-code" cols="40" rows="16" spellcheck="false"></textarea>
+                        </td>
+                    </tr>
+                </table>
+                <span id="novo-submit" class="button">Executar</span>
+            </div>
+        </div>
+        <script type="module" src="./js/index.js"></script>
     </body>
 </html>

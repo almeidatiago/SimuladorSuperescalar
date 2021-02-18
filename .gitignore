@@ -1,4 +1,5 @@
 .vscode/
+colorscheme.txt
 
 node_modules/
 package.json

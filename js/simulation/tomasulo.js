@@ -1,5 +1,4 @@
-// import * as assembly from '../assembly.js';
-import * as rand from './rand.js';
+import * as rand from '../rand.js';
 import { INSTRUCTION_TYPE } from './assembly.js';
 
 /** Registrador virtual. */
@@ -415,7 +414,6 @@ export class State {
 
             this.program_actions[station.program_order] = 'Write';
             if (station.functional_unit_step == 0) {
-                // this.memory[station.result] = station.vk;
                 this.memory[station.a[0]] = station.vk;
                 station.reset();
             }
@@ -635,17 +633,28 @@ export function simulate(instructions) {
     for (let i = 0; i < instructions.length; i++)
         program[i] = instructions[i];
 
-    // Cria o estado inicial do processamento.
+    // Calcula todos os estados da simulação.
+    let memoryAddr = new Set();
     let states = [new State(program, registers, memory)];
     for (let i = 0; i < 100; i++) {
         let next = states[i].clone();
         let changes = next.next_cycle();
         states.push(next);
+
+        for (let addr in next.memory)
+            memoryAddr.add(addr);
+
         if (!changes)
             break;
     }
+    for (let state of states)
+        for (let addr of memoryAddr)
+            if (!(addr in state.memory))
+                state.memory[addr] = null;
 
-    let wsl = 0;
+    return states;
+
+    /* let wsl = 0;
     for (let instruction of instructions) {
         if (instruction.line.length > wsl)
             wsl = instruction.line.length;
@@ -673,5 +682,5 @@ export function simulate(instructions) {
         str += actions;
         str += '⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻\n';
     }
-    return str;
+    return str; */
 }

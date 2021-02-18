@@ -1,4 +1,4 @@
-import { INSTRUCTION_TYPE } from './assembly.js';
+import { INSTRUCTION_TYPE } from './simulation/assembly.js';
 
 /**
  * Gera um número a partir de uma string, de forma determinística
