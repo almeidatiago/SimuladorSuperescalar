@@ -106,6 +106,17 @@ const COLORS = ['#8b7cdc', '#67db64', '#f65d50', '#529dc7', '#c1d85d', '#d887d9'
 const COLORS_SOFT = ['#d1cfee', '#c6ebca', '#f1c5c4', '#c0d9e7', '#e1eac7', '#e8d2ed', '#c0e8e8', '#f4e5c2'];
 
 /**
+ * Transforma o valor indicado na representação em texto apropriada
+ * @param {number} value 
+ */
+function formatNumber(value) {
+    const asString = `${value}`;
+    const asInteger = parseInt(asString);
+    const asFloat = value.toFixed(1);
+    return asInteger == asString ? asString : asFloat;
+}
+
+/**
  * Retorna as coordenadas absolutas do objeto indicado no canvas.
  */
 function getAbsolutePoint(obj, orientationX, orientationY) {
@@ -136,31 +147,30 @@ function renderLoadStations(state, colormap, stationNames) {
             continue;
 
         // Op
-        table.getCellText(1, i).set({ text: station.op });
+        table.getCellText(1, i).set({ text: station.getOp() });
 
         // Qj, Vj
-        if (station.is_j_ready()) {
-            table.getCellText(2, i).set({ text: station.vj.toString() });
+        const j = station.getJValue();
+        if (station.isJReady()) {
+            table.getCellText(2, i).set({ text: j.toString() });
         } else {
-            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[station.qj]] });
-            table.getCellText(2, i).set({ text: station.qj });
+            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
+            table.getCellText(2, i).set({ text: j });
         }
 
         // Qk, Vk
-        if (state.program[station.program_order].type === INSTRUCTION_TYPE.STORE) {
-            if (station.is_k_ready())
-                table.getCellText(3, i).set({ text: station.vk.toString() });
+        const k = station.getKValue();
+        if (station.getInstructionType() === INSTRUCTION_TYPE.STORE) {
+            if (station.isKReady())
+                table.getCellText(3, i).set({ text: k.toString() });
             else {
-                table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[station.qk]] });
-                table.getCellText(3, i).set({ text: station.qk });
+                table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
+                table.getCellText(3, i).set({ text: k });
             }
         }
 
         // A
-        let a = '';
-        if (station.a)
-            a = station.a.length > 1 ? `${station.a[0]} (${station.a[2]}+${station.a[1]})` : station.a[0].toString();
-        table.getCellText(4, i).set({ text: a });
+        table.getCellText(4, i).set({ text: station.inspectAddressValue() });
     }
 
     return table;
@@ -184,28 +194,24 @@ function renderArithStations(state, colormap, stationNames) {
             continue;
 
         // Op
-        table.getCellText(1, i).set({ text: station.op });
+        table.getCellText(1, i).set({ text: station.getOp() });
 
         // Qj, Vj
-        if (station.is_j_ready()) {
-            const vs = station.vj.toString();
-            const vi = parseInt(vs);
-            const vf = station.vj.toFixed(1);
-            table.getCellText(2, i).set({ text: vi === vs ? vs : vf });
+        const j = station.getJValue();
+        if (station.isJReady()) {
+            table.getCellText(2, i).set({ text: formatNumber(j) });
         } else {
-            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[station.qj]] });
-            table.getCellText(2, i).set({ text: station.qj });
+            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
+            table.getCellText(2, i).set({ text: j });
         }
 
         // Qk, Vk
-        if (station.is_k_ready()) {
-            const vs = station.vk.toString();
-            const vi = parseInt(vs);
-            const vf = station.vk.toFixed(1);
-            table.getCellText(3, i).set({ text: vi === vs ? vs : vf });
+        const k = station.getKValue();
+        if (station.isKReady()) {
+            table.getCellText(3, i).set({ text: formatNumber(k) });
         } else {
-            table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[station.qk]] });
-            table.getCellText(3, i).set({ text: station.qk });
+            table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
+            table.getCellText(3, i).set({ text: k });
         }
     }
 
@@ -244,14 +250,13 @@ export function renderTomasuloState(state) {
         let reg = state.register_names[i];
         registers.getCellText(0, i).set({ text: reg.toUpperCase() });
         reg = state.registers[reg];
+
+        const regValue = reg.getValue();
         if (reg.busy()) {
-            registers.getCellBorder(1, i).set({ fill: COLORS_SOFT[colormap[reg.qi]] });
-            registers.getCellText(1, i).set({ text: reg.qi });
-        } else if (reg.value !== null) {
-            const vs = reg.value.toString();
-            const vi = parseInt(vs);
-            const vf = reg.value.toFixed(1);
-            registers.getCellText(1, i).set({ text: vi === vs ? vs : vf });
+            registers.getCellBorder(1, i).set({ fill: COLORS_SOFT[colormap[regValue]] });
+            registers.getCellText(1, i).set({ text: regValue });
+        } else if (regValue !== null) {
+            registers.getCellText(1, i).set({ text: formatNumber(regValue) });
         }
     }
 
@@ -261,11 +266,11 @@ export function renderTomasuloState(state) {
     let multStations = [];
     for (let name in state.reservation_stations) {
         const station = state.reservation_stations[name];
-        if (station.operations.includes(INSTRUCTION_TYPE.LOAD))
+        if (station.isCompatible(INSTRUCTION_TYPE.LOAD))
             loadStations.push(name);
-        else if (station.operations.includes(INSTRUCTION_TYPE.ADD))
+        else if (station.isCompatible(INSTRUCTION_TYPE.ADD))
             addStations.push(name);
-        else if (station.operations.includes(INSTRUCTION_TYPE.MULTIPLY))
+        else if (station.isCompatible(INSTRUCTION_TYPE.MULTIPLY))
             multStations.push(name);
     }
     let load = renderLoadStations(state, colormap, loadStations);
