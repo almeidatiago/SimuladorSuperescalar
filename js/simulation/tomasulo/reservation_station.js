@@ -18,6 +18,7 @@ export default class ReservationStation {
         this.programOrder = null;
         this.instructionType = null;
         this.functionalUnitStep = 0;
+        this.functionalUnitBusy = false;
         this.result = null;
 
         this.op = null; // Operação a ser executada nos operandos
@@ -144,6 +145,13 @@ export default class ReservationStation {
     }
 
     /**
+     * Retorna true se a unidade funcional associada a esta estação estiver em processamento.
+     */
+    getFuncUnitBusy() {
+        return this.functionalUnitBusy;
+    }
+
+    /**
      * Retorna o valor do resultado da unidade funcional associada a esta estação, caso alguma instrução esteja sendo
      * processada.
      */
@@ -151,6 +159,13 @@ export default class ReservationStation {
         if (!this.busy)
             return null;
         return this.result;
+    }
+
+    /**
+     * Define se a unidade funcional associada a esta estação ainda está em processamento.
+     */
+    setFuncUnitBusy(value) {
+        this.functionalUnitBusy = value;
     }
 
     /**
@@ -260,6 +275,7 @@ export default class ReservationStation {
         let c = new ReservationStation(this.operations, this.functionalUnitDelay);
         c.programOrder = this.programOrder;
         c.functionalUnitStep = this.functionalUnitStep;
+        c.functionalUnitBusy = this.functionalUnitBusy;
         c.result = this.result;
         c.instructionType = this.instructionType;
         c.op = this.op;

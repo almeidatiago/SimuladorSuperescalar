@@ -81,7 +81,7 @@ export default class State {
      * Efetua uma cópia profunda deste objeto.
      * @returns {State}
      */
-    clone() {
+    clone(cloneProgramActions = false) {
         let r = {};
         for (let name in this.registers)
             r[name] = this.registers[name].clone();
@@ -94,16 +94,64 @@ export default class State {
         for (let addr in this.memory)
             m[addr] = this.memory[addr];
 
+        let pa = {};
+        if (cloneProgramActions)
+            for (let act in this.program_actions)
+                pa[act] = this.program_actions[act];
+
         let c = new State(this.program, r, m);
         c.cycle = this.cycle;
         c.instruction_queue = this.instruction_queue;
         c.reservation_stations = rs;
+        if (cloneProgramActions)
+            c.program_actions = pa;
 
         return c;
     }
 
+    setStationJFromRegister(stationName, registerName, interSteps = []) {
+        const station = this.reservation_stations[stationName];
+        const register = this.registers[registerName];
+        const regValue = register.getValue();
+
+        if (register.busy()) {
+            station.qj = regValue;
+            interSteps.push([
+                `O operando esq. da estação **${stationName}** é marcado para receber o valor do registrador **${registerName.toUpperCase()}**, que será produzido pela estação **${regValue}**.`,
+                this.clone(true),
+            ]);
+        } else {
+            station.setJValue(regValue);
+            interSteps.push([
+                `O operando esq. da estação **${stationName}** recebe o valor do registrador **${registerName.toUpperCase()}**, que já está disponível.`,
+                this.clone(true),
+            ]);
+        }
+    }
+
+    setStationKFromRegister(stationName, registerName, interSteps = []) {
+        const station = this.reservation_stations[stationName];
+        const register = this.registers[registerName];
+        const regValue = register.getValue();
+
+        if (register.busy()) {
+            station.qk = regValue;
+            interSteps.push([
+                `O operando dir. da estação **${stationName}** é marcado para receber o valor do registrador **${registerName.toUpperCase()}**, que será produzido pela estação **${regValue}**.`,
+                this.clone(true),
+            ]);
+        } else {
+            station.setKValue(regValue);
+            interSteps.push([
+                `O operando dir. da estação **${stationName}** recebe o valor do registrador **${registerName.toUpperCase()}**, que já está disponível.`,
+                this.clone(true),
+            ]);
+        }
+    }
+
     next_cycle() {
         this.cycle++;
+        const interSteps = [];
 
         // Calcula as estações de reserva que serão utilizadas antes de efetuar os passos de processamento:
         // Fase 1
@@ -118,7 +166,7 @@ export default class State {
         const s3store_rs = this.stations_for_stage_three_store();
 
         if (s1_rs === null && s2op_rs.length == 0 && s2s1_rs === null && s2s2_rs.length === 0 && s3_rs === null && s3store_rs.length === 0)
-            return false;
+            return [false, null];
 
         // 1 - Issue
         if (s1_rs !== null) {
@@ -128,31 +176,53 @@ export default class State {
 
             this.program_actions[this.instruction_queue] = 'Issue';
             this.instruction_queue++;
+            interSteps.push([
+                `A instrução \`${s1_inst.line}\` é emitida para execução, e é colocada na estação de reserva **${s1_rs}**.`,
+                this.clone(true),
+            ]);
 
             // Arithmetic operation
             if (s1_inst.type >= INSTRUCTION_TYPE.ADD) {
-                station.setJFromRegister(this.registers[s1_inst.lhs]);
-                station.setKFromRegister(this.registers[s1_inst.rhs]);
+                this.setStationJFromRegister(s1_rs, s1_inst.lhs, interSteps);
+                this.setStationKFromRegister(s1_rs, s1_inst.rhs, interSteps);
+
                 this.registers[s1_inst.dest].waitForStation(s1_rs);
+                interSteps.push([
+                    `O registrador **${s1_inst.dest.toUpperCase()}** é marcado para receber o valor que será produzido pela estação **${s1_rs}**.`,
+                    this.clone(true),
+                ]);
             }
 
             // Load or store
             if (s1_inst.type === INSTRUCTION_TYPE.LOAD || s1_inst.type === INSTRUCTION_TYPE.STORE) {
                 const addr_reg = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[0] : s1_inst.dest[0];
                 const addr_off = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[1] : s1_inst.dest[1];
-                station.setJFromRegister(this.registers[addr_reg]);
+                this.setStationJFromRegister(s1_rs, addr_reg, interSteps);
+
                 station.setAddressOffset(addr_off);
+                interSteps.push([
+                    `O campo _A_ da estação **${s1_rs}** recebe o valor de _offset_ ${addr_off} para o cálculo de endereço.`,
+                    this.clone(true),
+                ]);
             }
 
             // Load only
-            if (s1_inst.type === INSTRUCTION_TYPE.LOAD)
+            if (s1_inst.type === INSTRUCTION_TYPE.LOAD) {
                 this.registers[s1_inst.dest].waitForStation(s1_rs);
+                interSteps.push([
+                    `O registrador **${s1_inst.dest.toUpperCase()}** é marcado para receber o valor que será produzido pela estação **${s1_rs}**.`,
+                    this.clone(true),
+                ]);
+            }
 
             // Store only
             if (s1_inst.type === INSTRUCTION_TYPE.STORE)
-                station.setKFromRegister(this.registers[s1_inst.src]);
+                this.setStationKFromRegister(s1_rs, s1_inst.src, interSteps);
         } else if (s1_inst !== null && s1_inst !== undefined) {
-            console.log('stall'); // TODO descrição dos passos individuais em cada estágio
+            interSteps.push([
+                `A instrução \`${s1_inst.line}\` não pode ser emitida para execução, pois todas as estações de reserva estão ocupadas.`,
+                this.clone(true),
+            ]);
         }
 
         // 2 - Execute
@@ -161,8 +231,13 @@ export default class State {
         for (let name of s2op_rs) {
             const station = this.reservation_stations[name];
             station.advanceFuncUnitStep();
-
+            station.setFuncUnitBusy(true);
             this.program_actions[station.getProgramOrder()] = 'Exec';
+            interSteps.push([
+                `A unidade funcional associada à estação **${name}** está em execução.`,
+                this.clone(true),
+            ]);
+
             if (station.getFuncUnitStep() === 0) {
                 const j = station.getJValue();
                 const k = station.getKValue();
@@ -188,16 +263,26 @@ export default class State {
             const station = this.reservation_stations[s2s1_rs];
             station.calculateEffectiveAddress();
             station.advanceFuncUnitStep();
+            station.setFuncUnitBusy(false);
 
             this.program_actions[station.getProgramOrder()] = 'Exec';
+            interSteps.push([
+                `É efetuado o cálculo de endereço efetivo para a estação **${s2s1_rs}**.`,
+                this.clone(true),
+            ]);
         }
 
         // Load step 2
         for (let name of s2s2_rs) {
             const station = this.reservation_stations[name];
             station.advanceFuncUnitStep();
-
+            station.setFuncUnitBusy(true);
             this.program_actions[station.getProgramOrder()] = 'Exec';
+            interSteps.push([
+                `A unidade de memória associada à estação **${name}** está em execução.`,
+                this.clone(true),
+            ]);
+
             if (station.getFuncUnitStep() === 0) {
                 const srcAddr = station.getAddressFull();
                 if (!(srcAddr in this.memory)) {
@@ -214,6 +299,11 @@ export default class State {
         if (s3_rs !== null) {
             const station = this.reservation_stations[s3_rs];
             const result = station.getFuncUnitResult();
+            interSteps.push([
+                `A unidade associada à estação **${s3_rs}** terminou de executar, e está pronta para transmitir o resultado.`,
+                this.clone(true),
+            ]);
+            
             for (let name in this.registers) {
                 if (this.registers[name].busy() && this.registers[name].getValue() === s3_rs)
                     this.registers[name].setValue(result);
@@ -226,22 +316,48 @@ export default class State {
                     rsI.setKValue(result);
             }
             this.program_actions[station.getProgramOrder()] = 'Write';
+            station.setFuncUnitBusy(false);
+            interSteps.push([
+                'O resultado da execução é transmitido simultaneamente pelo _CDB_ para todos os recipientes.',
+                this.clone(true),
+            ]);
+
             station.reset();
+            interSteps.push([
+                `A estação de reserva **${s3_rs}** é marcada como livre.`,
+                this.clone(true),
+            ]);
         }
 
         // Store
         for (let name of s3store_rs) {
             const station = this.reservation_stations[name];
             station.advanceFuncUnitStep();
-
+            station.setFuncUnitBusy(true);
             this.program_actions[station.getProgramOrder()] = 'Write';
+
             if (station.getFuncUnitStep() == 0) {
+                station.setFuncUnitBusy(false);
+                interSteps.push([
+                    `A escrita em memória associada à estação **${name}** terminou de executar.`,
+                    this.clone(true),
+                ]);
+
                 this.memory[station.getAddressFull()] = station.getKValue();
                 station.reset();
+                interSteps.push([
+                    `A estação de reserva **${name}** é marcada como livre.`,
+                    this.clone(true),
+                ]);
+            } else {
+                interSteps.push([
+                    `A unidade de memória associada à estação **${name}** está executando a escrita em memória.`,
+                    this.clone(true),
+                ]);
             }
         }
 
-        return true;
+        return [true, interSteps];
     }
 
     /**
@@ -298,6 +414,9 @@ export default class State {
                 stations.push(name);
             }
         }
+        stations = stations.sort((a, b) => {
+            return this.reservation_stations[b].getProgramOrder() - this.reservation_stations[a].getProgramOrder();
+        });
         return stations;
     }
 
@@ -358,6 +477,9 @@ export default class State {
                     stations.push(name);
             }
         }
+        stations = stations.sort((a, b) => {
+            return this.reservation_stations[b].getProgramOrder() - this.reservation_stations[a].getProgramOrder();
+        });
         return stations;
     }
 
@@ -398,6 +520,9 @@ export default class State {
                     stations.push(name);
             }
         }
+        stations = stations.sort((a, b) => {
+            return this.reservation_stations[b].getProgramOrder() - this.reservation_stations[a].getProgramOrder();
+        });
         return stations;
     }
 

@@ -158,12 +158,51 @@ body {
 
 #control div {
     z-index: 15;
+    background-color: #eff2f5;
     border: 0 solid #bac2ce;
     border-top-width: 1px;
+    box-sizing: border-box;
+}
+
+#control .control-div {
     height: 48px;
     padding: 12px 8px;
-    box-sizing: border-box;
     font-size: 1.1em;
+}
+
+#control-msg {
+    position: absolute;
+    left: 100%;
+    bottom: 0;
+    padding: 3px 8px 4px 6px;
+    border-right-width: 1px !important;
+    border-top-right-radius: 8px;
+    line-height: 22px;
+    min-height: 32px;
+    font-size: 0.95em;
+    white-space: nowrap;
+    word-break: keep-all;
+    opacity: 0;
+    transition: all 0.2s;
+}
+
+#control-msg .bold {
+    font-size: 93%;
+    font-weight: bold;
+}
+
+#control-msg .italic {
+    font-size: 93%;
+    font-style: italic;
+}
+
+#control-msg .mono {
+    font-family: 'Courier New', 'Courier', 'Lucida Sans Typewriter', 'Lucida Typewriter', monospace;
+    font-weight: bold;
+}
+
+#control-msg.active {
+    opacity: 1;
 }
 
 #control div:first-child {
@@ -177,7 +216,7 @@ body {
 }
 
 #control .control-button {
-    padding: 10px;
+    padding: 10px 8px;
 }
 
 #control .control-button.active {

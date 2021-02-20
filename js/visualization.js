@@ -151,21 +151,29 @@ function renderLoadStations(state, colormap, stationNames) {
 
         // Qj, Vj
         const j = station.getJValue();
-        if (station.isJReady()) {
-            table.getCellText(2, i).set({ text: j.toString() });
+        if (j === null) {
+            table.getCellText(2, i).set({ text: '...' });
         } else {
-            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
-            table.getCellText(2, i).set({ text: j });
+            if (station.isJReady()) {
+                table.getCellText(2, i).set({ text: formatNumber(j) });
+            } else {
+                table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
+                table.getCellText(2, i).set({ text: j });
+            }
         }
 
         // Qk, Vk
-        const k = station.getKValue();
         if (station.getInstructionType() === INSTRUCTION_TYPE.STORE) {
-            if (station.isKReady())
-                table.getCellText(3, i).set({ text: k.toString() });
-            else {
-                table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
-                table.getCellText(3, i).set({ text: k });
+            const k = station.getKValue();
+            if (k === null) {
+                table.getCellText(3, i).set({ text: '...' });
+            } else {
+                if (station.isKReady())
+                    table.getCellText(3, i).set({ text: formatNumber(k) });
+                else {
+                    table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
+                    table.getCellText(3, i).set({ text: k });
+                }
             }
         }
 
@@ -198,20 +206,28 @@ function renderArithStations(state, colormap, stationNames) {
 
         // Qj, Vj
         const j = station.getJValue();
-        if (station.isJReady()) {
-            table.getCellText(2, i).set({ text: formatNumber(j) });
+        if (j === null) {
+            table.getCellText(2, i).set({ text: '...' });
         } else {
-            table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
-            table.getCellText(2, i).set({ text: j });
+            if (station.isJReady()) {
+                table.getCellText(2, i).set({ text: formatNumber(j) });
+            } else {
+                table.getCellBorder(2, i).set({ fill: COLORS_SOFT[colormap[j]] });
+                table.getCellText(2, i).set({ text: j });
+            }
         }
 
         // Qk, Vk
         const k = station.getKValue();
-        if (station.isKReady()) {
-            table.getCellText(3, i).set({ text: formatNumber(k) });
+        if (k === null) {
+            table.getCellText(3, i).set({ text: '...' });
         } else {
-            table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
-            table.getCellText(3, i).set({ text: k });
+            if (station.isKReady()) {
+                table.getCellText(3, i).set({ text: formatNumber(k) });
+            } else {
+                table.getCellBorder(3, i).set({ fill: COLORS_SOFT[colormap[k]] });
+                table.getCellText(3, i).set({ text: k });
+            }
         }
     }
 
@@ -293,6 +309,23 @@ export function renderTomasuloState(state) {
     let memUnit = new Multibox(canvas, 'Memory Unit', loadStations.length, 141, CELL_HEIGHT);
     let addUnit = new Multibox(canvas, 'Adder Unit', addStations.length, 121, CELL_HEIGHT);
     let multUnit = new Multibox(canvas, 'Multiplier Unit', multStations.length, 150, CELL_HEIGHT);
+
+    // Marca unidades funcionais como ocupadas
+    for (let i = 0; i < loadStations.length; i++) {
+        const name = loadStations[i];
+        if (state.reservation_stations[name].getFuncUnitBusy())
+            memUnit.getBoxBorder(i).set({ fill: COLORS_SOFT[colormap[name]] });
+    }
+    for (let i = 0; i < addStations.length; i++) {
+        const name = addStations[i];
+        if (state.reservation_stations[name].getFuncUnitBusy())
+            addUnit.getBoxBorder(i).set({ fill: COLORS_SOFT[colormap[name]] });
+    }
+    for (let i = 0; i < multStations.length; i++) {
+        const name = multStations[i];
+        if (state.reservation_stations[name].getFuncUnitBusy())
+            multUnit.getBoxBorder(i).set({ fill: COLORS_SOFT[colormap[name]] });
+    }
 
     // Posiciona elementos secundários
     const instBottom2 = getAbsolutePoint(instructions.getCellBorder(0, instructions.numRows - 1), 0.333, 1);

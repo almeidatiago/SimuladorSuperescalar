@@ -102,8 +102,8 @@ export class ModalNova extends Modal {
             return;
 
         // Efetua simulação do algoritmo de Tomasulo sobre o código processado
-        const tomasuloStates = tomasulo.simulate(instructions);
-        if (tomasuloStates.length === 0)
+        const tomasuloSim = tomasulo.simulate(instructions);
+        if (tomasuloSim[0].length !== tomasuloSim[1].length)
             return;
 
         // Gera nome para tab
@@ -115,11 +115,20 @@ export class ModalNova extends Modal {
             tabName = `${baseName} (${i})`;
         }
 
+        // Calcula o número de passos intermediários para cada ciclo de clock
+        const numInterStates = [];
+        for (let i = 0; i < tomasuloSim[0].length; i++)
+            numInterStates.push(tomasuloSim[1][i] === null ? 0 : tomasuloSim[1][i].length);
+
         // Adiciona tabs a lista
         this.tabManager.add(tabName, {
             type: 'tomasulo',
             curState: 0,
-            states: tomasuloStates,
+            curInterState: 0,
+            states: tomasuloSim[0],
+            interStates: tomasuloSim[1],
+            numStates: tomasuloSim[0].length,
+            numInterStates: numInterStates,
             instructions: instructions,
         });
     }

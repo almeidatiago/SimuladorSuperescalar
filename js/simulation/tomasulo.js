@@ -35,17 +35,19 @@ export function simulate(instructions) {
         program[i] = instructions[i];
 
     // Calcula todos os estados da simulação.
-    let memoryAddr = new Set();
-    let states = [new State(program, registers, memory)];
+    const memoryAddr = new Set();
+    const states = [new State(program, registers, memory)];
+    const interStates = [[]];
     for (let i = 0; i < 100; i++) {
-        let next = states[i].clone();
-        let changes = next.next_cycle();
-        states.push(next);
+        const nextState = states[i].clone();
+        const simResult = nextState.next_cycle();
+        states.push(nextState);
+        interStates.push(simResult[1]);
 
-        for (let addr in next.memory)
+        for (let addr in nextState.memory)
             memoryAddr.add(addr);
 
-        if (!changes)
+        if (!simResult[0])
             break;
     }
     for (let state of states)
@@ -53,7 +55,7 @@ export function simulate(instructions) {
             if (!(addr in state.memory))
                 state.memory[addr] = null;
 
-    return states;
+    return [states, interStates];
 
     /* let wsl = 0;
     for (let instruction of instructions) {

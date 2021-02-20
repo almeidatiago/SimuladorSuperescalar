@@ -23,7 +23,7 @@ export class Timeline {
      * @param {*} states 
      * @param {number} curState 
      */
-    update(instructions, states, curState) {
+    update(instructions, states, curState, stateToVisualize) {
         // Gera cabeçalho da tabela
         const headerRow = document.createElement('tr');
         headerRow.appendChild(document.createElement('th'));
@@ -44,8 +44,12 @@ export class Timeline {
             instRow.appendChild(td);
             for (let j = 0; j < states.length; j++) {
                 td = document.createElement('td');
-                if (j <= curState) {
+                if (j < curState) {
                     const action = states[j].program_actions[i] === null ? '' : states[j].program_actions[i];
+                    td.className = action.toLowerCase();
+                    td.textContent = action;
+                } else if (j === curState) {
+                    const action = stateToVisualize.program_actions[i] === null ? '' : stateToVisualize.program_actions[i];
                     td.className = action.toLowerCase();
                     td.textContent = action;
                 }
