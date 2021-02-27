@@ -14,6 +14,54 @@
             </div>
             <div id="tab-names"><div id="tab-filler">&nbsp;</div></div>
             <div id="tab-visual">
+                <div id="readme">
+                    <h1 id="simuladorsuperescalar">SimuladorSuperescalar</h1>
+                    <p>Este é um simulador didático de processadores de arquitetura superescalar, desenvolvido para o curso de <strong>Ciência da Computação</strong> da <strong>Universidade Federal do Tocantins</strong>.</p>
+                    <h3 id="funcionalidades">Funcionalidades</h3>
+                    <p>O simulador é capaz de simular a execução de um programa qualquer, fornecido em um subconjunto do código <em>assembly</em> RISC-V, em um processador sob o modelo do <a href="https://pt.wikipedia.org/wiki/Algoritmo_de_Tomasulo">Algoritmo de Tomasulo</a>. A simulação pode, então, ser visualizada passo-a-passo nos diagramas lógicos do algoritmo, e na linha do tempo de execução.</p>
+                    <p>O código fonte do simulador pode ser acessado <a href="https://github.com/hbertoduarte/SimuladorSuperescalar">neste endereço</a>.</p>
+                    <h2 id="como-utilizar">Como Utilizar</h2>
+                    <p>Para adicionar um novo programa, clique no botão <strong>Nova Simulação</strong> na barra superior da página, e insira o código do programa a ser simulado. Você pode também escolher um dos exemplos disponíveis no simulador.</p>
+                    <p>O código fornecido deve ser em código <em>assembly</em> RISC-V, do qual as seguintes instruções são suportadas:</p>
+                    <ul>
+                    <li><strong>Integer</strong>
+                    <ul>
+                    <li><code>li</code></li>
+                    <li><code>lb</code>, <code>lh</code>, <code>lw</code>, <code>ld</code>, <code>lq</code>, <code>lbu</code>, <code>lhu</code>, <code>lwu</code>, <code>ldu</code></li>
+                    <li><code>sb</code>, <code>sh</code>, <code>sw</code>, <code>sd</code>, <code>sq</code></li>
+                    <li><code>addi</code>, <code>addiw</code>, <code>addid</code></li>
+                    <li><code>add</code>, <code>addw</code>, <code>addd</code></li>
+                    <li><code>sub</code>, <code>subw</code>, <code>subd</code></li>
+                    <li><code>mul</code>, <code>mulw</code>, <code>muld</code></li>
+                    <li><code>div</code>, <code>divw</code>, <code>divd</code></li>
+                    </ul></li>
+                    <li><strong>Floating Point</strong>
+                    <ul>
+                    <li><code>flw</code>, <code>fld</code>, <code>flq</code></li>
+                    <li><code>fsw</code>, <code>fsd</code>, <code>fsq</code></li>
+                    <li><code>fadd.s</code>, <code>fadd.d</code>, <code>fadd.q</code></li>
+                    <li><code>fsub.s</code>, <code>fsub.d</code>, <code>fsub.q</code></li>
+                    <li><code>fmul.s</code>, <code>fmul.d</code>, <code>fmul.q</code></li>
+                    <li><code>fdiv.s</code>, <code>fdiv.d</code>, <code>fdiv.q</code></li>
+                    </ul></li>
+                    <li><strong>Control Flow</strong>
+                    <ul>
+                    <li><code>j</code></li>
+                    <li><code>beq</code>, <code>bne</code>, <code>blt</code>, <code>bge</code>, <code>bltu</code>, <code>bgeu</code></li>
+                    </ul></li>
+                    </ul>
+                    <p>Apesar de ambos números inteiros e números de ponto flutuante serem suportados, a simulação é efetuada em um modelo numérico abstrato, e todas as especificidades de cada instrução, como tamanho de palavra ou precisão numérica, são ignoradas.</p>
+                    <p>No código também podem ser fornecidos os valores iniciais de cada registrador, em um comentário no formato <code># nome = valor</code>. Como modelo desta funcionalidade, veja o exemplo <em>"Loop (Iterações simultâneas)"</em> no simulador.</p>
+                    <h2 id="visualização">Visualização</h2>
+                    <p>Após um novo programa ser adicionado, a visualização da execução será exibida em uma nova aba do simulador. A execução pode ser visualizada ciclo-a-ciclo, ou cada ciclo pode ser visualizado de forma segmentada nas etapas do Algoritmo de Tomasulo.</p>
+                    <p>O controle da visualização pode ser feito pelo menu no canto inferior esquerdo, ou através dos atalhos:</p>
+                    <ul>
+                    <li><code>Ctrl</code> + <code>Seta Esquerda</code>: Retrocede a execução em um ciclo de clock.</li>
+                    <li><code>Seta Esquerda</code>: Retrocede a execução em um passo.</li>
+                    <li><code>Seta Direita</code>: Avança a execução em um passo.</li>
+                    <li><code>Ctrl</code> + <code>Seta Direita</code>: Avança a execução em um ciclo de clock.</li>
+                    </ul>
+                </div>
                 <div id="control">
                     <div id="control-skip-back" class="control-button control-div active" title="Voltar um ciclo"><img src="./svg/skipBack.svg" alt="Volta ciclo" /></div>
                     <div id="control-step-back" class="control-button control-div active" title="Voltar um passo"><img src="./svg/stepBack.svg" alt="Volta passo" /></div>
