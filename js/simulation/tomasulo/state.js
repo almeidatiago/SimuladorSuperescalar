@@ -47,34 +47,8 @@ export default class State {
             .map(x => x[0]);
 
         this.program_actions = {};
-        for (let i in this.program)
+        for (let i in this.program.getCodeOrder())
             this.program_actions[i] = null;
-    }
-
-    /**
-     * Descreve o estado.
-     */
-    inspect() {
-        let str = `Clock: ${this.cycle}\nFila de instruções:\n`;
-        for (let i = this.instruction_queue; i < Object.keys(this.program).length; i++)
-            str += `    ${i}: ${this.program[i].line}\n`;
-
-        str += 'Registradores:\n';
-        for (let name of this.register_names)
-            str += `    ${name} = ${this.registers[name].inspect()}\n`;
-
-        str += 'Estações de reserva:\n         \tBusy \tOp. \tVj \tVk \tQj \tQk \tA\n';
-        for (let name in this.reservation_stations)
-            str += `    ${name}:\t${this.reservation_stations[name].inspect()}\n`;
-
-        str += 'Memória:\n';
-        if (Object.keys(this.memory).length > 0) {
-            for (let addr in this.memory)
-                str += `    ${addr} = ${this.memory[addr]}\n`;
-        }
-
-        str += '\n';
-        return str;
     }
 
     /**
@@ -99,7 +73,7 @@ export default class State {
             for (let act in this.program_actions)
                 pa[act] = this.program_actions[act];
 
-        let c = new State(this.program, r, m);
+        let c = new State(this.program.clone(), r, m);
         c.cycle = this.cycle;
         c.instruction_queue = this.instruction_queue;
         c.reservation_stations = rs;
@@ -129,6 +103,15 @@ export default class State {
         }
     }
 
+    setStationJFromImmediate(stationName, immediateValue, interSteps = []) {
+        const station = this.reservation_stations[stationName];
+        station.setJValue(immediateValue);
+        interSteps.push([
+            `O operando esq. da estação **${stationName}** recebe o valor imediato //${immediateValue}//.`,
+            this.clone(true),
+        ]);
+    }
+
     setStationKFromRegister(stationName, registerName, interSteps = []) {
         const station = this.reservation_stations[stationName];
         const register = this.registers[registerName];
@@ -149,13 +132,73 @@ export default class State {
         }
     }
 
+    setStationKFromImmediate(stationName, immediateValue, interSteps = []) {
+        const station = this.reservation_stations[stationName];
+        station.setKValue(immediateValue);
+        interSteps.push([
+            `O operando dir. da estação **${stationName}** recebe o valor imediato //${immediateValue}//.`,
+            this.clone(true),
+        ]);
+    }
+
     next_cycle() {
         this.cycle++;
+        const prevInstructionQueue = this.instruction_queue;
         const interSteps = [];
 
         // Calcula as estações de reserva que serão utilizadas antes de efetuar os passos de processamento:
         // Fase 1
-        const s1_inst = this.program[this.instruction_queue];
+        let s1_inst = this.program.getNextInstruction();
+
+        // Processamento das instruções de branching
+        if (s1_inst !== null && s1_inst.type === INSTRUCTION_TYPE.BRANCH) {
+            const destLabel = s1_inst.dest;
+
+            if (s1_inst.cmp == undefined) {
+                this.program_actions[this.instruction_queue] = 'Jump';
+                this.instruction_queue++;
+                this.program.advanceInstruction(destLabel);
+                interSteps.push([
+                    `A instrução \`${s1_inst.line}\` é executada, e as instruções do programa a partir da label //"${destLabel}"// são carregadas.`,
+                    this.clone(true),
+                ]);
+            } else {
+                if (this.registers[s1_inst.lhs].busy()) {
+                    interSteps.push([
+                        `A instrução \`${s1_inst.line}\` não pode ser executada, pois o valor do registrador **${s1_inst.lhs.toUpperCase()}** não está disponível.`,
+                        this.clone(true),
+                    ]);
+                } else if (this.registers[s1_inst.rhs].busy()) {
+                    interSteps.push([
+                        `A instrução \`${s1_inst.line}\` não pode ser executada, pois o valor do registrador **${s1_inst.rhs.toUpperCase()}** não está disponível.`,
+                        this.clone(true),
+                    ]);
+                } else {
+                    const lhs = this.registers[s1_inst.lhs].getValue();
+                    const rhs = this.registers[s1_inst.rhs].getValue();
+                    const res = s1_inst.cmp(lhs, rhs);
+                    
+                    this.program_actions[this.instruction_queue] = 'Branch';
+                    this.instruction_queue++;
+                    if (res) {
+                        this.program.advanceInstruction(destLabel);
+                        interSteps.push([
+                            `A instrução \`${s1_inst.line}\` é executada, e obtém o resultado //${res}//. As instruções do programa a partir da label //"${destLabel}"// são carregadas.`,
+                            this.clone(true),
+                        ]);
+                    } else {
+                        this.program.advanceInstruction();
+                        interSteps.push([
+                            `A instrução \`${s1_inst.line}\` é executada, e obtém o resultado //${res}//. As instruções continuam em sua ordem original.`,
+                            this.clone(true),
+                        ]);
+                    }
+                }
+            }
+
+            s1_inst = null;
+        }
+
         const s1_rs = this.station_for_stage_one(s1_inst);
         // Fase 2
         const s2op_rs = this.stations_for_stage_two_operations();
@@ -165,17 +208,18 @@ export default class State {
         const s3_rs = this.station_for_stage_three();
         const s3store_rs = this.stations_for_stage_three_store();
 
-        if (s1_rs === null && s2op_rs.length == 0 && s2s1_rs === null && s2s2_rs.length === 0 && s3_rs === null && s3store_rs.length === 0)
+        if (s1_rs === null && s2op_rs.length == 0 && s2s1_rs === null && s2s2_rs.length === 0 && s3_rs === null && s3store_rs.length === 0 && prevInstructionQueue === this.instruction_queue)
             return [false, null];
 
         // 1 - Issue
         if (s1_rs !== null) {
             // Estação de reserva livre, issue continua...
             const station = this.reservation_stations[s1_rs];
-            station.setupOperation(s1_inst.name, this.instruction_queue, s1_inst.type);
+            station.setupOperation(s1_inst.name, s1_inst.codeOrder, this.instruction_queue, s1_inst.type);
 
             this.program_actions[this.instruction_queue] = 'Issue';
             this.instruction_queue++;
+            this.program.advanceInstruction();
             interSteps.push([
                 `A instrução \`${s1_inst.line}\` é emitida para execução, e é colocada na estação de reserva **${s1_rs}**.`,
                 this.clone(true),
@@ -184,7 +228,10 @@ export default class State {
             // Arithmetic operation
             if (s1_inst.type >= INSTRUCTION_TYPE.ADD) {
                 this.setStationJFromRegister(s1_rs, s1_inst.lhs, interSteps);
-                this.setStationKFromRegister(s1_rs, s1_inst.rhs, interSteps);
+                if (s1_inst.imm !== undefined && s1_inst.imm !== null)
+                    this.setStationKFromImmediate(s1_rs, s1_inst.imm, interSteps);
+                else
+                    this.setStationKFromRegister(s1_rs, s1_inst.rhs, interSteps);
 
                 this.registers[s1_inst.dest].waitForStation(s1_rs);
                 interSteps.push([
@@ -195,15 +242,22 @@ export default class State {
 
             // Load or store
             if (s1_inst.type === INSTRUCTION_TYPE.LOAD || s1_inst.type === INSTRUCTION_TYPE.STORE) {
-                const addr_reg = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[0] : s1_inst.dest[0];
-                const addr_off = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[1] : s1_inst.dest[1];
-                this.setStationJFromRegister(s1_rs, addr_reg, interSteps);
+                if (s1_inst.imm !== undefined && s1_inst.imm !== null) {
+                    this.setStationJFromImmediate(s1_rs, s1_inst.imm, interSteps);
+                    for (let i = station.getFuncUnitDelay() - 1; i >= 0; i--)
+                        station.advanceFuncUnitStep();
+                    station.setFuncUnitResult(s1_inst.imm);
+                } else {
+                    const addr_reg = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[0] : s1_inst.dest[0];
+                    const addr_off = s1_inst.type === INSTRUCTION_TYPE.LOAD ? s1_inst.src[1] : s1_inst.dest[1];
+                    this.setStationJFromRegister(s1_rs, addr_reg, interSteps);
+                    station.setAddressOffset(addr_off);
 
-                station.setAddressOffset(addr_off);
-                interSteps.push([
-                    `O campo _A_ da estação **${s1_rs}** recebe o valor de _offset_ ${addr_off} para o cálculo de endereço.`,
-                    this.clone(true),
-                ]);
+                    interSteps.push([
+                        `O campo //A// da estação **${s1_rs}** recebe o valor de //offset// ${addr_off} para o cálculo de endereço.`,
+                        this.clone(true),
+                    ]);
+                }
             }
 
             // Load only
@@ -286,7 +340,7 @@ export default class State {
             if (station.getFuncUnitStep() === 0) {
                 const srcAddr = station.getAddressFull();
                 if (!(srcAddr in this.memory)) {
-                    const instruction = this.program[station.getProgramOrder()];
+                    const instruction = this.program.getAtExecutionOrder(station.getProgramOrder());
                     this.memory[srcAddr] = rand.instructionValue(instruction.dest, instruction.name, instruction.type);
                 }
                 station.setFuncUnitResult(this.memory[srcAddr]);
@@ -303,7 +357,7 @@ export default class State {
                 `A unidade associada à estação **${s3_rs}** terminou de executar, e está pronta para transmitir o resultado.`,
                 this.clone(true),
             ]);
-            
+
             for (let name in this.registers) {
                 if (this.registers[name].busy() && this.registers[name].getValue() === s3_rs)
                     this.registers[name].setValue(result);
@@ -318,7 +372,7 @@ export default class State {
             this.program_actions[station.getProgramOrder()] = 'Write';
             station.setFuncUnitBusy(false);
             interSteps.push([
-                'O resultado da execução é transmitido simultaneamente pelo _CDB_ para todos os recipientes.',
+                'O resultado da execução é transmitido simultaneamente pelo //CDB// para todos os recipientes.',
                 this.clone(true),
             ]);
 
@@ -369,7 +423,7 @@ export default class State {
         for (let name in this.reservation_stations) {
             const rs = this.reservation_stations[name];
             if (rs.busy && rs.getInstructionType() === type)
-                pending.push(rs.getProgramOrder());
+                pending.push(name);
         }
         return pending;
     }
@@ -464,13 +518,23 @@ export default class State {
                 rs.getFuncUnitStep() < rs.getFuncUnitDelay() &&
                 rs.getFuncUnitStep() > 0
             ) {
-                const load_addr = this.program[rs.getProgramOrder()].src;
-
                 let has_dependency = false;
-                for (let i of pending_stores) {
-                    const store_addr = this.program[i].dest;
-                    if (i < rs.getProgramOrder() && load_addr[0] === store_addr[0] && load_addr[1] === store_addr[1])
-                        has_dependency = true;
+
+                const rs_inst = this.program.getAtExecutionOrder(rs.getProgramOrder());
+                if (rs_inst.imm == undefined) {
+                    const load_addr = rs_inst.src;
+                    for (let strName of pending_stores) {
+                        const strSt = this.reservation_stations[strName];
+                        const store_addr = this.program.getAtExecutionOrder(strSt.getProgramOrder()).dest;
+                        const storeEfAddr = strSt.getAddressFull();
+                        if (storeEfAddr != null && storeEfAddr != undefined) {
+                            if (strSt.getProgramOrder() < rs.getProgramOrder() && storeEfAddr === rs.getAddressFull())
+                                has_dependency = true;
+                        } else {
+                            if (strSt.getProgramOrder() < rs.getProgramOrder() && load_addr[0] === store_addr[0] && load_addr[1] === store_addr[1])
+                                has_dependency = true;
+                        }
+                    }
                 }
 
                 if (!has_dependency)
@@ -502,18 +566,36 @@ export default class State {
                 rs.getFuncUnitStep() < rs.getFuncUnitDelay() &&
                 rs.isKReady()
             ) {
-                const store_addr = this.program[rs.getProgramOrder()].src;
+                const store_addr = this.program.getAtExecutionOrder(rs.getProgramOrder()).src;
 
                 let has_dependency = false;
-                for (let i of pending_loads) {
-                    const addr = this.program[i].src;
-                    if (i < rs.getProgramOrder() && store_addr[0] === addr[0] && store_addr[1] === addr[1])
-                        has_dependency = true;
+                for (let loadName of pending_loads) {
+                    const loadSt = this.reservation_stations[loadName];
+                    const i_inst = this.program.getAtExecutionOrder(loadSt.getProgramOrder());
+                    if (i_inst.imm !== undefined && i_inst.imm !== null)
+                        continue;
+
+                    const addr = i_inst.src;
+                    const efAddr = loadSt.getAddressFull();
+                    if (efAddr != null && efAddr != undefined) {
+                        if (loadSt.getProgramOrder() < rs.getProgramOrder() && efAddr === rs.getAddressFull())
+                            has_dependency = true;
+                    } else {
+                        if (loadSt.getProgramOrder() < rs.getProgramOrder() && store_addr[0] === addr[0] && store_addr[1] === addr[1])
+                            has_dependency = true;
+                    }
                 }
-                for (let i of pending_stores) {
-                    const addr = this.program[i].dest;
-                    if (i < rs.getProgramOrder() && store_addr[0] === addr[0] && store_addr[1] === addr[1])
-                        has_dependency = true;
+                for (let strName of pending_stores) {
+                    const strSt = this.reservation_stations[strName];
+                    const addr = this.program.getAtExecutionOrder(strSt.getProgramOrder()).dest;
+                    const efAddr = strSt.getAddressFull();
+                    if (efAddr != null && efAddr != undefined) {
+                        if (strSt.getProgramOrder() < rs.getProgramOrder() && efAddr === rs.getAddressFull())
+                            has_dependency = true;
+                    } else {
+                        if (strSt.getProgramOrder() < rs.getProgramOrder() && store_addr[0] === addr[0] && store_addr[1] === addr[1])
+                            has_dependency = true;
+                    }
                 }
 
                 if (!has_dependency)

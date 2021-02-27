@@ -50,6 +50,7 @@ canvas.updateDimensions = function () {
 canvas.on('mouse:down', function (opt) {
     const e = opt.e;
     if (!e.altKey && !e.shiftKey && !e.ctrlKey) {
+        canvas.setCursor('grabbing');
         this.isDragging = true;
         this.lastX = e.clientX;
         this.lastY = e.clientY;
@@ -61,6 +62,7 @@ canvas.on('mouse:down', function (opt) {
  */
 canvas.on('mouse:move', function (opt) {
     if (this.isDragging) {
+        canvas.setCursor('grabbing');
         const e = opt.e;
         let vpt = this.viewportTransform;
         vpt[4] += e.clientX - this.lastX;
@@ -77,6 +79,7 @@ canvas.on('mouse:move', function (opt) {
  */
 canvas.on('mouse:up', function () {
     this.setViewportTransform(this.viewportTransform);
+    canvas.setCursor('grab');
     this.isDragging = false;
 });
 
@@ -251,11 +254,22 @@ export function renderTomasuloState(state) {
         colormap[station_names[i]] = i % COLORS.length;
 
     // Renderiza fila de instruções
-    const numInst = Object.keys(state.program).length;
-    let instructions = new Table(canvas, [281], CELL_HEIGHT, numInst, true);
-    for (let i = state.instruction_queue; i < numInst; i++) {
-        const pos = numInst - i - 1 + state.instruction_queue;
-        instructions.getCellText(0, pos).set({ text: state.program[i].line });
+    const queues = state.program.getInstructionQueue();
+    const instQueue = queues[0];
+    const remQueue = queues[1];
+    const instQueuePos = state.program.getInstructionQueuePos();
+    const maxQueueLength = state.program.getVisibleQueueLength();
+    const queueOffset = maxQueueLength - instQueue.length;
+    let instructions = new Table(canvas, [281], CELL_HEIGHT, maxQueueLength, true);
+    for (let i = instQueuePos; i < instQueue.length; i++) {
+        const pos = instQueue.length - i - 1 + instQueuePos + queueOffset;
+        instructions.getCellText(0, pos).set({ text: instQueue[i].line });
+    }
+    if (instQueuePos < instQueue.length) {
+        for (let i = 0; i < remQueue.length; i++) {
+            const pos = queueOffset - 1 - i;
+            instructions.getCellText(0, pos).set({ text: remQueue[i].line, opacity: 0.45 });
+        }
     }
 
     // Renderiza banco de registradores

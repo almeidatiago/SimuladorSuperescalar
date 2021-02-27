@@ -139,10 +139,9 @@ export class Controller extends EventTarget {
         this.numStates = numStates;
         this.numInterStates = numInterStates;
 
-        // let msgHtml = msg.length === 0 ? '' : `Passo ${this.curInterState + 1}: ${msg}`;
         let msgHtml = msg;
         msgHtml = msgHtml.replace(/\*\*([^*]+)\*\*/g, '<span class="bold">$1</span>');
-        msgHtml = msgHtml.replace(/_([^_]+)_/g, '<span class="italic">$1</span>');
+        msgHtml = msgHtml.replace(/\/\/([^/]+)\/\//g, '<span class="italic">$1</span>');
         msgHtml = msgHtml.replace(/`([^`]+)`/g, '<span class="mono">$1</span>');
         this.msg.innerHTML = msgHtml;
 

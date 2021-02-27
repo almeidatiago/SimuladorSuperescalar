@@ -250,10 +250,20 @@ body {
 
 #timeline {
     border-collapse: collapse;
+    user-select: none;
 }
 
 #timeline tr {
     line-height: 24px;
+}
+
+#timeline tr.mark {
+    background-color: #f4f6f8;
+}
+
+#timeline tr.mark th:nth-child(even),
+#timeline tr.mark td:nth-child(even) {
+    background-color: #eaedf1;
 }
 
 #timeline th,
@@ -277,6 +287,11 @@ body {
 
 #timeline td.write {
     background-color: #e8d2ed !important;
+}
+
+#timeline td.branch,
+#timeline td.jump {
+    background-color: #f4e5c2 !important;
 }
 
 #timeline tr:first-child th {

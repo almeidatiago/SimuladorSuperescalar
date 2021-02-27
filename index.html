@@ -37,10 +37,12 @@
                         <td>Exemplo:</td>
                         <td>
                             <select id="novo-template">
-                                <option value="" selected>&nbsp;</option>
+                                <option value="">&nbsp;</option>
+                                <option value="ooo" selected>Execução fora-de-ordem</option>
                                 <option value="raw">Dependência RAW (Read after Write)</option>
                                 <option value="war">Dependência WAR (Write after Read)</option>
                                 <option value="waw">Dependência WAW (Write after Write)</option>
+                                <option value="loop">Loop (Iterações simultâneas)</option>
                             </select>
                         </td>
                     </tr>

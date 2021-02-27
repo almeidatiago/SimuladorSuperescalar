@@ -54,9 +54,8 @@ export class ModalNova extends Modal {
         this.templateSelect = document.getElementById(templateSelectId);
         this.codeTextarea = document.getElementById(codeTextareaId);
         this.submit = document.getElementById(submitId);
-
-        if (this.codeTextarea.value.length === 0)
-            this.codeTextarea.value = 'flw f6, 32(a2)\nflw f2, 44(a3)\nfmul.s f0, f2, f4\nfsub.s f8, f2, f6\nfdiv.s f10, f0, f6\nfadd.s f6, f6, f2';
+        
+        this.loadTemplate(this.templateSelect.value);
 
         // Prepara eventos da interface
         this.submit.addEventListener('click', this.submitCode.bind(this));
@@ -84,6 +83,12 @@ export class ModalNova extends Modal {
             case 'waw':
                 this.codeTextarea.value = 'fmul.s f6, f1, f2\nfadd.s f6, f3, f4';
                 break;
+            case 'ooo':
+                this.codeTextarea.value = 'flw f0, 32(a0)\nflw f1, 64(a1)\nfmul.s f2, f0, f1\nfsub.s f3, f0, f1\nfdiv.s f3, f2, f3\nfadd.s f1, f0, f1';
+                break;
+            case 'loop':
+                this.codeTextarea.value = '# a0 = 0\n# a1 = 96\n# f1 = 2.0\nloop:\n    flw     f0, 0(a0)\n    fmul.s  f2, f0, f1\n    fsw     f2, 0(a0)\n    addi    a0, a0, 32\n    blt     a0, a1, loop\nend:';
+                break;
         }
     }
 
@@ -97,18 +102,18 @@ export class ModalNova extends Modal {
         const code = this.codeTextarea.value;
 
         // Processa código em instruções
-        const instructions = assembly.parse(code);
-        if (instructions.length === 0)
+        const fragments = assembly.parse(code);
+        if (fragments == null)
             return;
 
         // Efetua simulação do algoritmo de Tomasulo sobre o código processado
-        const tomasuloSim = tomasulo.simulate(instructions);
+        const tomasuloSim = tomasulo.simulate(fragments);
         if (tomasuloSim[0].length !== tomasuloSim[1].length)
             return;
 
         // Gera nome para tab
         let i = 1;
-        let baseName = name !== null ? name : `${instructions[0].line}`;
+        let baseName = name !== null ? name : `${fragments[0][0].line}`;
         let tabName = baseName;
         while (this.tabManager.contains(tabName)) {
             i++;
@@ -129,7 +134,7 @@ export class ModalNova extends Modal {
             interStates: tomasuloSim[1],
             numStates: tomasuloSim[0].length,
             numInterStates: numInterStates,
-            instructions: instructions,
+            instructions: fragments[0],
         });
     }
 

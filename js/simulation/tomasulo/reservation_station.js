@@ -15,6 +15,7 @@ export default class ReservationStation {
      * Retorna as propriedades desta estação para seus valores iniciais.
      */
     reset() {
+        this.codeOrder = null;
         this.programOrder = null;
         this.instructionType = null;
         this.functionalUnitStep = 0;
@@ -33,9 +34,10 @@ export default class ReservationStation {
     /**
      * Marca esta estação como ocupada, e a configura com as propriedades indicadas.
      */
-    setupOperation(operationName, instructionOrder, instructionType) {
+    setupOperation(operationName, codeOrder, instructionOrder, instructionType) {
         this.busy = true;
         this.op = operationName;
+        this.codeOrder = codeOrder;
         this.programOrder = instructionOrder;
         this.functionalUnitStep = this.functionalUnitDelay;
         this.instructionType = instructionType;
@@ -125,6 +127,15 @@ export default class ReservationStation {
         if (!this.busy)
             return null;
         return this.programOrder;
+    }
+
+    /**
+     * Retorna a ordem de código da instrução sendo processada por esta estação, caso alguma exista.
+     */
+    getCodeOrder() {
+        if (!this.busy)
+            return null;
+        return this.codeOrder;
     }
 
     /**
@@ -273,6 +284,7 @@ export default class ReservationStation {
      */
     clone() {
         let c = new ReservationStation(this.operations, this.functionalUnitDelay);
+        c.codeOrder = this.codeOrder;
         c.programOrder = this.programOrder;
         c.functionalUnitStep = this.functionalUnitStep;
         c.functionalUnitBusy = this.functionalUnitBusy;

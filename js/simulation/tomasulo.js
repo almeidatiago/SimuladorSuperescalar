@@ -1,9 +1,14 @@
 import * as rand from '../rand.js';
-import { INSTRUCTION_TYPE } from './assembly.js';
+import { INSTRUCTION_TYPE, Program } from './assembly.js';
 import Register from './tomasulo/register.js';
 import State from './tomasulo/state.js';
 
-export function simulate(instructions) {
+export function simulate(fragments) {
+    const instructions = fragments[0];
+    const sections = fragments[1];
+    const sectionOrder = fragments[2];
+    const initialValues = fragments[3];
+
     // Os valores dos registradores e das posições de memória que serão lidos são inicializados automaticamente
     let registers = {};
     let memory = {};
@@ -18,7 +23,7 @@ export function simulate(instructions) {
             registers[name] = register;
         }
 
-        if (instruction.type === INSTRUCTION_TYPE.LOAD) {
+        if (instruction.type === INSTRUCTION_TYPE.LOAD && instruction.imm == undefined) {
             const addr = registers[instruction.src[0]].getValue() + instruction.src[1];
             memory[addr] = rand.instructionValue(instruction.dest, instruction.name, instruction.type);
         }
@@ -29,10 +34,13 @@ export function simulate(instructions) {
                 registers[name] = new Register();
     }
 
+    // Sobrescreve valores iniciais
+    for (const init in initialValues) {
+        registers[init].setValue(initialValues[init]);
+    }
+
     // Constrói objeto de programa, com instruções em sua ordem de execução
-    let program = {};
-    for (let i = 0; i < instructions.length; i++)
-        program[i] = instructions[i];
+    const program = new Program(instructions, sections, sectionOrder);
 
     // Calcula todos os estados da simulação.
     const memoryAddr = new Set();
@@ -56,34 +64,4 @@ export function simulate(instructions) {
                 state.memory[addr] = null;
 
     return [states, interStates];
-
-    /* let wsl = 0;
-    for (let instruction of instructions) {
-        if (instruction.line.length > wsl)
-            wsl = instruction.line.length;
-    }
-
-    let str = '';
-    for (let i = 0; i < states.length; i++) {
-        const state = states[i];
-        str += state.inspect();
-        str += '— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —\n';
-
-        let actions = ''.padEnd(wsl);
-        for (let j = 0; j < states.length; j++)
-            actions += `\t${j}`;
-        actions += '\n';
-        for (let j = 0; j < instructions.length; j++) {
-            const instruction = instructions[j];
-            actions += `${instruction.line}:`.padEnd(wsl);
-            for (let k = 0; k <= i; k++) {
-                const action = states[k].program_actions[j];
-                actions += `\t${action === null ? '-' : action}`;
-            }
-            actions += '\n';
-        }
-        str += actions;
-        str += '⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻⸻\n';
-    }
-    return str; */
 }
