@@ -7,6 +7,7 @@ import { Timeline } from './components/timeline.js';
 const timeline = new Timeline('timeline');
 const controller = new Controller('control', 'control-counter', 'control-msg', ['control-skip-back', 'control-skip-fwd'], ['control-step-back', 'control-step-fwd']);
 const tabManager = new TabManager('tab-names', 'tab-filler');
+const readme = document.getElementById('readme');
 
 // Prepara janelas modais
 new ModalNova(tabManager, 'md-novo', ['open-novo'], ['close-novo'], 'novo-template', 'novo-code', 'novo-submit');
@@ -16,6 +17,7 @@ tabManager.addEventListener('tab-unset', () => {
     visualization.clearRender();
     timeline.clear();
     controller.hide();
+    readme.style.display = 'block';
 });
 
 // Renderiza e atualiza visualização quando uma aba é exibida/atualizada
@@ -51,6 +53,7 @@ tabManager.addEventListener('tab-set', () => {
     // Atualiza controle da visualização
     controller.show();
     controller.updateInfo(curState, curInterState, tabContents.numStates, numInterStates, messageToDisplay);
+    readme.style.display = 'none';
 });
 
 // Atualiza a visualização
